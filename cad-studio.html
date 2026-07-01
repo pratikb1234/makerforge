@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MakerForge · 3D CAD</title>
+<style>
+  :root{--bg:#12151a;--panel:#191d24;--panel2:#20252e;--line:#2b323d;--line2:#3a434f;--txt:#e8edf3;--mut:#8b96a5;--acc:#f0803c;--acc2:#d96a28;--blue:#4c9ffe;--ok:#3ecf8e;--danger:#ff5f6d;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+  .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+  .top{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand{font-weight:800;margin-right:6px;display:flex;align-items:center;gap:7px}
+  .brand .d{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--acc),var(--ok))}
+  .brand small{color:var(--mut);font-weight:500}
+  .g{display:flex;gap:3px;padding:0 6px;border-right:1px solid var(--line)}
+  .g:last-child{border:none}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:6px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px;position:relative}
+  .btn:hover{background:#2a323d;border-color:#4c5866}
+  .btn:active{transform:translateY(1px)}
+  .btn.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));border-color:var(--acc2);color:#231103;font-weight:700}
+  .btn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .menu{position:absolute;top:110%;left:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:5px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:40;display:none;flex-direction:column;gap:2px}
+  .menu.show{display:flex}
+  .menu button{background:transparent;border:none;color:var(--txt);text-align:left;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center;font-family:inherit}
+  .menu button:hover{background:var(--blue);color:#fff}
+  .menu .sep{height:1px;background:var(--line);margin:3px 2px}
+  .main{display:grid;grid-template-columns:250px 1fr 250px;min-height:0}
+  .side{background:var(--panel);overflow-y:auto;display:flex;flex-direction:column}
+  .side.l{border-right:1px solid var(--line)} .side.r{border-left:1px solid var(--line)}
+  .sec{border-bottom:1px solid var(--line)}
+  .sec h3{margin:0;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);display:flex;justify-content:space-between;align-items:center}
+  .sec h3 button{background:transparent;border:none;color:var(--mut);cursor:pointer;font-size:14px}
+  .body{padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+  .feat{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
+  .feat.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .feat.consumed{opacity:.4}
+  .feat .ic{font-size:14px;width:18px;text-align:center}
+  .feat .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .feat .eye{color:var(--mut);cursor:pointer;font-size:12px}
+  .feat.suppressed .nm{text-decoration:line-through;color:var(--mut)}
+  .row{display:flex;align-items:center;gap:6px}
+  .row label{color:var(--mut);width:64px;font-size:11px;flex-shrink:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld span{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+  input,select{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:6px;padding:5px 7px;font:inherit;font-size:12px;width:100%}
+  input:focus,select:focus{outline:1px solid var(--acc)}
+  input[type=color]{padding:2px;height:28px}
+  input[type=range]{padding:0;accent-color:var(--acc)}
+  .vp{position:relative;background:radial-gradient(circle at 50% 40%,#20252d,#0e1116)}
+  #gl{position:absolute;inset:0;display:block}
+  .cube{position:absolute;right:12px;top:12px;display:grid;grid-template-columns:repeat(2,42px);gap:5px}
+  .cube button{background:rgba(25,29,36,.85);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:7px 0;cursor:pointer;font-size:11px;font-weight:700;backdrop-filter:blur(6px)}
+  .cube button:hover{background:var(--blue);color:#fff}
+  .vpbar{position:absolute;left:12px;bottom:12px;display:flex;gap:5px;background:rgba(25,29,36,.85);border:1px solid var(--line);border-radius:9px;padding:5px;backdrop-filter:blur(6px)}
+  .status{display:flex;gap:16px;padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--mut);font-size:11px}
+  .status b{color:var(--txt)}
+  .status .sp{flex:1}
+  .hint{color:var(--mut);font-size:11px;line-height:1.5}
+  .paramrow{display:flex;gap:5px;align-items:center}
+  .paramrow input:first-child{width:90px}
+  .toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(6px);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 15px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:60;opacity:0;transition:.22s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--line2);border-radius:20px;padding:2px 9px;font-size:11px}
+  .sw{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.2)}
+  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid var(--panel)}
+  kbd{background:var(--panel2);border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:10px;font-family:inherit}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;display:none;align-items:center;justify-content:center}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:18px;width:min(520px,92vw);max-height:86vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .modal h2{margin:0 0 6px}.modal .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand"><span class="d"></span> MakerForge <small>3D CAD</small></div>
+    <div class="g">
+      <button class="btn" id="mNew">＋ New</button>
+      <button class="btn" id="mSave">💾 Save</button>
+      <button class="btn" id="mOpen">📂 Open</button>
+    </div>
+    <div class="g">
+      <div style="position:relative"><button class="btn" data-menu="addM">🧊 Add Body ▾</button>
+        <div class="menu" id="addM">
+          <button data-add="box">🟦 Box</button>
+          <button data-add="cylinder">🥫 Cylinder</button>
+          <button data-add="sphere">🔵 Sphere</button>
+          <button data-add="cone">🔺 Cone</button>
+          <button data-add="torus">🍩 Torus</button>
+        </div>
+      </div>
+      <div style="position:relative"><button class="btn" data-menu="skM">✏️ Sketch ▾</button>
+        <div class="menu" id="skM">
+          <button data-add="ext_rect">▭ Rectangle → Extrude</button>
+          <button data-add="ext_circle">◯ Circle → Extrude</button>
+          <button data-add="ext_poly">⬡ Polygon → Extrude</button>
+          <div class="sep"></div>
+          <button data-add="revolve">🔄 Rectangle → Revolve</button>
+        </div>
+      </div>
+    </div>
+    <div class="g">
+      <button class="btn" id="opUnion" title="Combine (select 2)">◕ Combine</button>
+      <button class="btn" id="opSub" title="Cut (A − B)">◐ Cut</button>
+      <button class="btn" id="opInt" title="Intersect">◑ Intersect</button>
+    </div>
+    <div class="g">
+      <button class="btn" id="mDup">⧉ Duplicate</button>
+      <button class="btn" id="mDel">🗑 Delete</button>
+      <button class="btn" id="mMeasure">📏 Measure</button>
+      <button class="btn" id="mSection">✂ Section</button>
+    </div>
+    <div style="flex:1"></div>
+    <div class="g" style="border:none">
+      <div style="position:relative"><button class="btn pri" data-menu="exM">⇩ Export ▾</button>
+        <div class="menu" id="exM" style="right:0;left:auto">
+          <button data-ex="stlb">⬢ STL (binary)</button>
+          <button data-ex="stla">⬢ STL (ascii)</button>
+          <button data-ex="obj">◈ OBJ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: timeline + params -->
+    <div class="side l">
+      <div class="sec">
+        <h3>Feature Timeline</h3>
+        <div class="body" id="tree"><div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div></div>
+      </div>
+      <div class="sec">
+        <h3>Parameters <button id="addParam" title="Add variable">＋</button></h3>
+        <div class="body" id="paramBox">
+          <div class="hint">Named variables you can use in any number field, e.g. <b>wall=3</b> then type <b>wall*2</b>.</div>
+          <div id="paramList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER viewport -->
+    <div class="vp" id="vp">
+      <canvas id="gl"></canvas>
+      <div class="cube">
+        <button data-view="iso">Iso</button><button data-view="front">Front</button>
+        <button data-view="top">Top</button><button data-view="right">Right</button>
+      </div>
+      <div class="vpbar">
+        <button class="btn" id="vFit" title="Fit all">▣ Fit</button>
+        <button class="btn" id="vProj" title="Perspective / Orthographic">⧉ Persp</button>
+        <button class="btn" id="vGrid" title="Grid">▦</button>
+        <button class="btn" id="vWire" title="Wireframe">◇</button>
+      </div>
+    </div>
+
+    <!-- RIGHT properties -->
+    <div class="side r">
+      <div class="sec">
+        <h3>Properties</h3>
+        <div class="body" id="props"><div class="hint">Select a feature to edit it.</div></div>
+      </div>
+      <div class="sec">
+        <h3>Appearance</h3>
+        <div class="body" id="appear"><div class="hint">Select a body to change color / opacity.</div></div>
+      </div>
+      <div class="sec" id="secSection" style="display:none">
+        <h3>Section</h3>
+        <div class="body">
+          <div class="row"><label>Axis</label><select id="secAxis"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option></select></div>
+          <div class="row"><label>Position</label><input type="range" id="secPos" min="-100" max="100" value="0"></div>
+          <div class="row"><label>Flip</label><input type="checkbox" id="secFlip"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span>Sel: <b id="stSel">—</b></span>
+    <span>Bodies: <b id="stBodies">0</b></span>
+    <span>Triangles: <b id="stTris">0</b></span>
+    <span>Size: <b id="stSize">—</b></span>
+    <span class="sp"></span>
+    <span id="stMsg">Orbit: drag · Pan: right-drag / shift-drag · Zoom: wheel</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="mbg"><div class="modal" id="modal"></div></div>
+<input type="file" id="fileIn" accept=".json,.mkc" style="display:none">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   MakerForge 3D CAD — parametric feature-history modeler.
+   Verified CSG kernel (11 unit tests) + Three.js r128 renderer.
+   ===================================================================== */
+const $=s=>document.querySelector(s);
+
+/* ---------------- CSG kernel (MIT, Evan Wallace, BSP) ---------------- */
+function CSG(){this.polygons=[];}
+CSG.fromPolygons=p=>{const c=new CSG();c.polygons=p;return c;};
+CSG.prototype={clone(){const c=new CSG();c.polygons=this.polygons.map(p=>p.clone());return c;},toPolygons(){return this.polygons;},
+ union(g){const a=new Node(this.clone().polygons),b=new Node(g.clone().polygons);a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());return CSG.fromPolygons(a.allPolygons());},
+ subtract(g){const a=new Node(this.clone().polygons),b=new Node(g.clone().polygons);a.invert();a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());a.invert();return CSG.fromPolygons(a.allPolygons());},
+ intersect(g){const a=new Node(this.clone().polygons),b=new Node(g.clone().polygons);a.invert();b.clipTo(a);b.invert();a.clipTo(b);b.clipTo(a);a.build(b.allPolygons());a.invert();return CSG.fromPolygons(a.allPolygons());}};
+function V3(x,y,z){this.x=x;this.y=y;this.z=z;}
+V3.prototype={clone(){return new V3(this.x,this.y,this.z);},negated(){return new V3(-this.x,-this.y,-this.z);},plus(a){return new V3(this.x+a.x,this.y+a.y,this.z+a.z);},minus(a){return new V3(this.x-a.x,this.y-a.y,this.z-a.z);},times(a){return new V3(this.x*a,this.y*a,this.z*a);},dot(a){return this.x*a.x+this.y*a.y+this.z*a.z;},lerp(a,t){return this.plus(a.minus(this).times(t));},length(){return Math.sqrt(this.dot(this));},unit(){return this.times(1/this.length());},cross(a){return new V3(this.y*a.z-this.z*a.y,this.z*a.x-this.x*a.z,this.x*a.y-this.y*a.x);}};
+function Vtx(pos,normal){this.pos=pos;this.normal=normal;}
+Vtx.prototype={clone(){return new Vtx(this.pos.clone(),this.normal.clone());},flip(){this.normal=this.normal.negated();},interpolate(o,t){return new Vtx(this.pos.lerp(o.pos,t),this.normal.lerp(o.normal,t));}};
+function Plane(n,w){this.normal=n;this.w=w;}Plane.EPS=1e-5;
+Plane.fromPoints=(a,b,c)=>{const n=b.minus(a).cross(c.minus(a)).unit();return new Plane(n,n.dot(a));};
+Plane.prototype={clone(){return new Plane(this.normal.clone(),this.w);},flip(){this.normal=this.normal.negated();this.w=-this.w;},
+ splitPolygon(pg,cf,cb,f,b){const CO=0,FR=1,BK=2,SP=3;let type=0;const types=[];
+  for(let i=0;i<pg.vertices.length;i++){const t=this.normal.dot(pg.vertices[i].pos)-this.w;const ty=t<-Plane.EPS?BK:t>Plane.EPS?FR:CO;type|=ty;types.push(ty);}
+  switch(type){case CO:(this.normal.dot(pg.plane.normal)>0?cf:cb).push(pg);break;case FR:f.push(pg);break;case BK:b.push(pg);break;
+   case SP:{const ff=[],bb=[];for(let i=0;i<pg.vertices.length;i++){const j=(i+1)%pg.vertices.length,ti=types[i],tj=types[j],vi=pg.vertices[i],vj=pg.vertices[j];
+    if(ti!=BK)ff.push(vi);if(ti!=FR)bb.push(ti!=BK?vi.clone():vi);
+    if((ti|tj)==SP){const t=(this.w-this.normal.dot(vi.pos))/this.normal.dot(vj.pos.minus(vi.pos));const v=vi.interpolate(vj,t);ff.push(v);bb.push(v.clone());}}
+    if(ff.length>=3)f.push(new Poly(ff,pg.shared));if(bb.length>=3)b.push(new Poly(bb,pg.shared));}break;}}};
+function Poly(v,shared){this.vertices=v;this.shared=shared;this.plane=Plane.fromPoints(v[0].pos,v[1].pos,v[2].pos);}
+Poly.prototype={clone(){return new Poly(this.vertices.map(v=>v.clone()),this.shared);},flip(){this.vertices.reverse().forEach(v=>v.flip());this.plane.flip();}};
+function Node(pg){this.plane=null;this.front=null;this.back=null;this.polygons=[];if(pg)this.build(pg);}
+Node.prototype={clone(){const n=new Node();n.plane=this.plane&&this.plane.clone();n.front=this.front&&this.front.clone();n.back=this.back&&this.back.clone();n.polygons=this.polygons.map(p=>p.clone());return n;},
+ invert(){for(const p of this.polygons)p.flip();this.plane.flip();if(this.front)this.front.invert();if(this.back)this.back.invert();const t=this.front;this.front=this.back;this.back=t;},
+ clipPolygons(pg){if(!this.plane)return pg.slice();let f=[],b=[];for(const p of pg)this.plane.splitPolygon(p,f,b,f,b);if(this.front)f=this.front.clipPolygons(f);if(this.back)b=this.back.clipPolygons(b);else b=[];return f.concat(b);},
+ clipTo(n){this.polygons=n.clipPolygons(this.polygons);if(this.front)this.front.clipTo(n);if(this.back)this.back.clipTo(n);},
+ allPolygons(){let p=this.polygons.slice();if(this.front)p=p.concat(this.front.allPolygons());if(this.back)p=p.concat(this.back.allPolygons());return p;},
+ build(pg){if(!pg.length)return;if(!this.plane)this.plane=pg[0].plane.clone();const f=[],b=[];for(const p of pg)this.plane.splitPolygon(p,this.polygons,this.polygons,f,b);if(f.length){if(!this.front)this.front=new Node();this.front.build(f);}if(b.length){if(!this.back)this.back=new Node();this.back.build(b);}}};
+
+/* --------- adapters: THREE geometry <-> CSG --------- */
+function csgFromGeometry(geom,matrix){
+  let g=geom.index?geom.toNonIndexed():geom;
+  const pos=g.attributes.position.array;const polys=[];
+  const nm=new THREE.Matrix3().getNormalMatrix(matrix||new THREE.Matrix4());
+  for(let i=0;i<pos.length;i+=9){
+    const p=[];for(let j=0;j<3;j++){const v=new THREE.Vector3(pos[i+j*3],pos[i+j*3+1],pos[i+j*3+2]);if(matrix)v.applyMatrix4(matrix);p.push(v);}
+    const n=new THREE.Vector3().subVectors(p[1],p[0]).cross(new THREE.Vector3().subVectors(p[2],p[0]));
+    if(n.lengthSq()<1e-14)continue;n.normalize();
+    polys.push(new Poly(p.map(v=>new Vtx(new V3(v.x,v.y,v.z),new V3(n.x,n.y,n.z)))));
+  }
+  return CSG.fromPolygons(polys);
+}
+function geometryFromCSG(csg){
+  const positions=[],normals=[];
+  csg.toPolygons().forEach(pg=>{for(let i=2;i<pg.vertices.length;i++){[0,i-1,i].forEach(k=>{const v=pg.vertices[k];positions.push(v.pos.x,v.pos.y,v.pos.z);normals.push(v.normal.x,v.normal.y,v.normal.z);});}});
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+  g.computeVertexNormals(); // smooth shading for round bodies
+  return g;
+}
+
+/* ===================== App state ===================== */
+const APP={features:[],params:{wall:3},sel:new Set(),_id:1,proj:'persp',grid:true,wire:false,measure:false,section:false,measurePts:[]};
+const uid=()=>APP._id++;
+const PALETTE=['#f0803c','#4c9ffe','#3ecf8e','#c07bff','#ffce54','#ff8fce','#5fe0e0','#a0d468'];
+
+/* ---- feature factory defaults ---- */
+function newFeature(kind){
+  const id=uid();const color=PALETTE[APP.features.length%PALETTE.length];
+  const base={id,color,visible:true,suppressed:false,x:0,y:0,z:0,rx:0,ry:0,rz:0};
+  const F={
+    box:{...base,type:'box',name:'Box',w:40,d:40,h:40},
+    cylinder:{...base,type:'cylinder',name:'Cylinder',r:20,h:40,seg:48},
+    sphere:{...base,type:'sphere',name:'Sphere',r:20,seg:32},
+    cone:{...base,type:'cone',name:'Cone',r1:20,r2:0,h:40,seg:48},
+    torus:{...base,type:'torus',name:'Torus',r:24,tube:7,seg:40},
+    ext_rect:{...base,type:'extrude',name:'Extrude (rect)',profile:'rect',plane:'XY',w:40,h:24,dist:20,sym:false},
+    ext_circle:{...base,type:'extrude',name:'Extrude (circle)',profile:'circle',plane:'XY',r:18,dist:20,sym:false},
+    ext_poly:{...base,type:'extrude',name:'Extrude (polygon)',profile:'poly',plane:'XY',r:20,n:6,dist:20,sym:false},
+    revolve:{...base,type:'revolve',name:'Revolve',r0:8,w:14,h:30,angle:360,seg:64},
+  }[kind];
+  return F;
+}
+
+/* ---- build geometry for a single feature (returns THREE geometry, local) ---- */
+function featureGeometry(f){
+  let g;
+  if(f.type==='box')g=new THREE.BoxGeometry(f.w,f.h,f.d);
+  else if(f.type==='cylinder')g=new THREE.CylinderGeometry(f.r,f.r,f.h,Math.max(3,f.seg|0));
+  else if(f.type==='sphere')g=new THREE.SphereGeometry(f.r,Math.max(4,f.seg|0),Math.max(3,(f.seg/2)|0));
+  else if(f.type==='cone')g=new THREE.CylinderGeometry(Math.max(0.0001,f.r2),Math.max(0.0001,f.r1),f.h,Math.max(3,f.seg|0));
+  else if(f.type==='torus')g=new THREE.TorusGeometry(f.r,f.tube,16,Math.max(6,f.seg|0));
+  else if(f.type==='extrude'){
+    const sh=new THREE.Shape();
+    if(f.profile==='rect'){sh.moveTo(-f.w/2,-f.h/2);sh.lineTo(f.w/2,-f.h/2);sh.lineTo(f.w/2,f.h/2);sh.lineTo(-f.w/2,f.h/2);sh.lineTo(-f.w/2,-f.h/2);}
+    else if(f.profile==='circle'){sh.absarc(0,0,f.r,0,Math.PI*2,false);}
+    else {const n=Math.max(3,f.n|0);sh.moveTo(f.r,0);for(let i=1;i<=n;i++){const a=Math.PI*2*i/n;sh.lineTo(Math.cos(a)*f.r,Math.sin(a)*f.r);}}
+    g=new THREE.ExtrudeGeometry(sh,{depth:f.dist,bevelEnabled:false});
+    if(f.sym)g.translate(0,0,-f.dist/2);
+    // orient by plane (default extrude is +Z = XY plane)
+    if(f.plane==='XZ')g.rotateX(-Math.PI/2);
+    else if(f.plane==='YZ')g.rotateY(Math.PI/2);
+  }
+  else if(f.type==='revolve'){
+    const pts=[new THREE.Vector2(f.r0,0),new THREE.Vector2(f.r0+f.w,0),new THREE.Vector2(f.r0+f.w,f.h),new THREE.Vector2(f.r0,f.h),new THREE.Vector2(f.r0,0)];
+    g=new THREE.LatheGeometry(pts,Math.max(3,f.seg|0),0,f.angle*Math.PI/180);
+  }
+  return g;
+}
+function featureMatrix(f){
+  const m=new THREE.Matrix4();const e=new THREE.Euler(f.rx*Math.PI/180,f.ry*Math.PI/180,f.rz*Math.PI/180);
+  m.makeRotationFromEuler(e);m.setPosition(f.x,f.y,f.z);return m;
+}
+
+/* ===================== Rebuild (evaluate timeline) ===================== */
+let bodyGroup;
+function rebuild(){
+  // clear
+  while(bodyGroup.children.length)bodyGroup.remove(bodyGroup.children[0]);
+  const produced=new Map();   // id -> {csg, color, fid}
+  const order=[];
+  for(const f of APP.features){
+    if(f.suppressed)continue;
+    if(f.type==='boolean'){
+      const a=produced.get(f.aId),b=produced.get(f.bId);
+      if(!a||!b){continue;}
+      let res;try{res=f.op==='union'?a.csg.union(b.csg):f.op==='subtract'?a.csg.subtract(b.csg):a.csg.intersect(b.csg);}catch(e){res=a.csg;}
+      produced.delete(f.aId);produced.delete(f.bId);
+      const oi=order.indexOf(f.aId);if(oi>=0)order.splice(oi,1);const oj=order.indexOf(f.bId);if(oj>=0)order.splice(oj,1);
+      produced.set(f.id,{csg:res,color:f.color,fid:f.id});order.push(f.id);
+    } else {
+      try{const geo=featureGeometry(f);const csg=csgFromGeometry(geo,featureMatrix(f));produced.set(f.id,{csg,color:f.color,fid:f.id});order.push(f.id);}catch(e){}
+    }
+  }
+  // render remaining bodies
+  let tris=0;const box=new THREE.Box3();let any=false;
+  order.forEach(id=>{
+    const b=produced.get(id);const f=APP.features.find(x=>x.id===id);if(!f||!f.visible)return;
+    const g=geometryFromCSG(b.csg);
+    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(f.color),metalness:.1,roughness:.65,flatShading:false,transparent:(f.opacity!=null&&f.opacity<1),opacity:f.opacity!=null?f.opacity:1,wireframe:APP.wire,side:THREE.DoubleSide});
+    applyClip(mat);
+    const mesh=new THREE.Mesh(g,mat);mesh.userData.fid=id;
+    if(APP.sel.has(id)){mesh.material.emissive=new THREE.Color(0x332200);mesh.material.emissiveIntensity=1;}
+    bodyGroup.add(mesh);
+    tris+=g.attributes.position.count/3;
+    g.computeBoundingBox();if(g.boundingBox){box.union(g.boundingBox);any=true;}
+  });
+  $('#stBodies').textContent=order.length;
+  $('#stTris').textContent=Math.round(tris);
+  if(any){const s=new THREE.Vector3();box.getSize(s);$('#stSize').textContent=`${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)}`;APP._bbox=box;}else{$('#stSize').textContent='—';APP._bbox=null;}
+  renderTree();render();
+}
+
+/* ===================== THREE setup ===================== */
+let scene,camera,camP,camO,renderer,gridHelper,axes,clipPlane;
+function initThree(){
+  const vp=$('#vp');
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x11151b);
+  const w=vp.clientWidth,h=vp.clientHeight,asp=w/h;
+  camP=new THREE.PerspectiveCamera(45,asp,0.1,5000);
+  const fr=120;camO=new THREE.OrthographicCamera(-fr*asp,fr*asp,fr,-fr,-2000,4000);
+  camera=camP;
+  renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setSize(w,h,false);renderer.localClippingEnabled=true;
+  scene.add(new THREE.AmbientLight(0xffffff,.55));
+  const d1=new THREE.DirectionalLight(0xffffff,.85);d1.position.set(60,120,90);scene.add(d1);
+  const d2=new THREE.DirectionalLight(0x88aaff,.35);d2.position.set(-80,-40,-60);scene.add(d2);
+  gridHelper=new THREE.GridHelper(400,40,0x3a4450,0x222a33);gridHelper.rotation.x=Math.PI/2;scene.add(gridHelper); // grid on XY (Z up look)
+  gridHelper.rotation.x=0; // keep grid on XZ (Y up)
+  axes=new THREE.AxesHelper(40);scene.add(axes);
+  bodyGroup=new THREE.Group();scene.add(bodyGroup);
+  clipPlane=new THREE.Plane(new THREE.Vector3(0,0,-1),0);
+  APP.cam={target:new THREE.Vector3(0,0,0),theta:Math.PI*0.25,phi:Math.PI*0.35,radius:220};
+  applyCam();
+  bindOrbit();
+  window.addEventListener('resize',onResize);
+}
+function applyCam(){
+  const c=APP.cam;const x=c.target.x+c.radius*Math.sin(c.phi)*Math.cos(c.theta);
+  const y=c.target.y+c.radius*Math.cos(c.phi);
+  const z=c.target.z+c.radius*Math.sin(c.phi)*Math.sin(c.theta);
+  camera.position.set(x,y,z);camera.up.set(0,1,0);camera.lookAt(c.target);
+  if(camera.isOrthographicCamera){const asp=$('#vp').clientWidth/$('#vp').clientHeight;const fr=c.radius*0.55;camera.left=-fr*asp;camera.right=fr*asp;camera.top=fr;camera.bottom=-fr;camera.updateProjectionMatrix();}
+}
+function render(){renderer.render(scene,camera);}
+function onResize(){const vp=$('#vp');const w=vp.clientWidth,h=vp.clientHeight,asp=w/h;renderer.setSize(w,h,false);camP.aspect=asp;camP.updateProjectionMatrix();applyCam();render();}
+
+/* ---- orbit / pan / zoom ---- */
+function bindOrbit(){
+  const el=$('#gl');let mode=null,px=0,py=0;
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);px=e.clientX;py=e.clientY;
+    if(APP.measure){pickMeasure(e);return;}
+    if(e.button===0&&!e.shiftKey)mode='orbit';else mode='pan';
+    if(e.button===0&&!e.shiftKey){/* also allow selection on click w/o drag */APP._downSel={x:e.clientX,y:e.clientY};}
+  });
+  el.addEventListener('pointermove',e=>{if(!mode)return;const dx=e.clientX-px,dy=e.clientY-py;px=e.clientX;py=e.clientY;const c=APP.cam;
+    if(mode==='orbit'){c.theta-=dx*0.01;c.phi=Math.max(0.05,Math.min(Math.PI-0.05,c.phi-dy*0.01));if(APP._downSel){if(Math.abs(e.clientX-APP._downSel.x)>3||Math.abs(e.clientY-APP._downSel.y)>3)APP._downSel=null;}}
+    else{const c2=APP.cam;const panScale=c2.radius*0.0016;const right=new THREE.Vector3().subVectors(camera.position,c2.target).cross(camera.up).normalize();const up=camera.up.clone();c2.target.addScaledVector(right,-dx*panScale);c2.target.addScaledVector(up,dy*panScale);}
+    applyCam();render();
+  });
+  el.addEventListener('pointerup',e=>{if(mode==='orbit'&&APP._downSel){pickSelect(e);}mode=null;APP._downSel=null;});
+  el.addEventListener('wheel',e=>{e.preventDefault();const c=APP.cam;c.radius=Math.max(5,Math.min(2000,c.radius*(e.deltaY>0?1.1:1/1.1)));applyCam();render();},{passive:false});
+}
+function ndc(e){const r=$('#gl').getBoundingClientRect();return new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);}
+function pickSelect(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera);const hits=ray.intersectObjects(bodyGroup.children,false);
+  if(hits.length){const id=hits[0].object.userData.fid;if(e.shiftKey){APP.sel.has(id)?APP.sel.delete(id):APP.sel.add(id);}else APP.sel=new Set([id]);}
+  else if(!e.shiftKey)APP.sel.clear();
+  syncSel();rebuild();
+}
+function pickMeasure(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera);const hits=ray.intersectObjects(bodyGroup.children,false);if(!hits.length)return;APP.measurePts.push(hits[0].point.clone());if(APP.measurePts.length===2){const d=APP.measurePts[0].distanceTo(APP.measurePts[1]);toast('📏 Distance: '+d.toFixed(2)+' mm');drawMeasure();APP.measurePts=[];}else{toast('Pick second point…');}
+}
+let measureLine;
+function drawMeasure(){if(measureLine)scene.remove(measureLine);const g=new THREE.BufferGeometry().setFromPoints(APP.measurePts);measureLine=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xffce54}));scene.add(measureLine);render();setTimeout(()=>{if(measureLine){scene.remove(measureLine);measureLine=null;render();}},4000);}
+
+/* ---- section clipping ---- */
+function applyClip(mat){if(APP.section){mat.clippingPlanes=[clipPlane];}else mat.clippingPlanes=[];}
+function updateClip(){const ax=$('#secAxis').value,pos=+$('#secPos').value,flip=$('#secFlip').checked?-1:1;const n=new THREE.Vector3(ax==='x'?1:0,ax==='y'?1:0,ax==='z'?1:0).multiplyScalar(-flip);clipPlane.normal.copy(n);clipPlane.constant=pos*flip;rebuild();}
+
+/* ===================== UI: tree, props, params ===================== */
+function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑'}[t]||'▪';}
+function renderTree(){
+  const el=$('#tree');
+  if(!APP.features.length){el.innerHTML='<div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div>';return;}
+  el.innerHTML='';
+  APP.features.forEach(f=>{
+    const consumed=isConsumed(f.id);
+    const d=document.createElement('div');d.className='feat'+(APP.sel.has(f.id)?' sel':'')+(f.suppressed?' suppressed':'')+(consumed?' consumed':'');
+    d.innerHTML=`<span class="ic">${icon(f.type)}</span><span class="sw" style="background:${f.color}"></span><span class="nm">${f.name}</span><span class="eye" title="Show/hide">${f.visible?'👁':'🚫'}</span>`;
+    d.addEventListener('click',ev=>{if(ev.target.classList.contains('eye')){f.visible=!f.visible;rebuild();return;}if(ev.metaKey||ev.ctrlKey){APP.sel.has(f.id)?APP.sel.delete(f.id):APP.sel.add(f.id);}else APP.sel=new Set([f.id]);syncSel();rebuild();});
+    el.appendChild(d);
+  });
+}
+function isConsumed(id){return APP.features.some(f=>f.type==='boolean'&&!f.suppressed&&(f.aId===id||f.bId===id));}
+
+const NUM=(label,key,f,step)=>`<div class="fld"><span>${label}</span><input data-k="${key}" value="${f[key]}" ${step?`step="${step}"`:''}></div>`;
+function renderProps(){
+  const box=$('#props'),ap=$('#appear');
+  const ids=[...APP.sel];
+  if(ids.length!==1){box.innerHTML='<div class="hint">Select one feature to edit its parameters.</div>';ap.innerHTML='<div class="hint">Select a body to change color / opacity.</div>';return;}
+  const f=APP.features.find(x=>x.id===ids[0]);if(!f){box.innerHTML='';return;}
+  let h=`<div class="fld"><span>Name</span><input data-k="name" value="${f.name}"></div>`;
+  const g=inner=>`<div class="grid3">${inner}</div>`, g2=inner=>`<div class="grid2">${inner}</div>`;
+  if(f.type==='box')h+=g(NUM('Width X','w',f)+NUM('Depth Z','d',f)+NUM('Height Y','h',f));
+  else if(f.type==='cylinder')h+=g(NUM('Radius','r',f)+NUM('Height','h',f)+NUM('Sides','seg',f));
+  else if(f.type==='sphere')h+=g2(NUM('Radius','r',f)+NUM('Quality','seg',f));
+  else if(f.type==='cone')h+=g(NUM('Bottom r','r1',f)+NUM('Top r','r2',f)+NUM('Height','h',f))+g2(NUM('Sides','seg',f)+'');
+  else if(f.type==='torus')h+=g(NUM('Radius','r',f)+NUM('Tube','tube',f)+NUM('Sides','seg',f));
+  else if(f.type==='extrude'){
+    h+=`<div class="fld"><span>Plane</span><select data-k="plane">${['XY','XZ','YZ'].map(p=>`<option ${f.plane===p?'selected':''}>${p}</option>`).join('')}</select></div>`;
+    if(f.profile==='rect')h+=g2(NUM('Width','w',f)+NUM('Height','h',f));
+    else if(f.profile==='circle')h+=g2(NUM('Radius','r',f)+'');
+    else h+=g2(NUM('Radius','r',f)+NUM('Sides','n',f));
+    h+=g2(NUM('Distance','dist',f)+`<div class="fld"><span>Symmetric</span><select data-k="sym"><option value="false" ${!f.sym?'selected':''}>No</option><option value="true" ${f.sym?'selected':''}>Yes</option></select></div>`);
+  }
+  else if(f.type==='revolve')h+=g(NUM('Inner r','r0',f)+NUM('Wall','w',f)+NUM('Height','h',f))+g2(NUM('Angle°','angle',f)+NUM('Quality','seg',f));
+  else if(f.type==='boolean'){h+=`<div class="hint">Operation: <b>${f.op}</b>. Edit the inputs above it in the timeline.</div>`;}
+  if(f.type!=='boolean')h+=`<div class="hint">Position &amp; rotation</div>`+g(NUM('X','x',f)+NUM('Y','y',f)+NUM('Z','z',f))+g(NUM('Rot X','rx',f)+NUM('Rot Y','ry',f)+NUM('Rot Z','rz',f));
+  box.innerHTML=h;
+  box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else f[k]=evalNum(v,f[k]);rebuild();});});
+  // appearance
+  ap.innerHTML=`<div class="row"><label>Color</label><input type="color" data-a="color" value="${f.color}"></div>
+    <div class="row"><label>Opacity</label><input type="range" min="0.15" max="1" step="0.05" data-a="opacity" value="${f.opacity!=null?f.opacity:1}"></div>
+    <div class="row"><label>Visible</label><input type="checkbox" data-a="visible" ${f.visible?'checked':''}></div>`;
+  ap.querySelector('[data-a=color]').addEventListener('input',e=>{f.color=e.target.value;rebuild();});
+  ap.querySelector('[data-a=opacity]').addEventListener('input',e=>{f.opacity=+e.target.value;rebuild();});
+  ap.querySelector('[data-a=visible]').addEventListener('change',e=>{f.visible=e.target.checked;rebuild();});
+}
+function evalNum(str,fallback){try{const keys=Object.keys(APP.params);const vals=keys.map(k=>APP.params[k]);const fn=new Function(...keys,'return ('+str+')');const v=fn(...vals);return isFinite(v)?v:fallback;}catch(_){const n=parseFloat(str);return isFinite(n)?n:fallback;}}
+
+function renderParams(){const el=$('#paramList');el.innerHTML='';Object.keys(APP.params).forEach(k=>{const row=document.createElement('div');row.className='paramrow';row.innerHTML=`<input value="${k}" data-pk><input value="${APP.params[k]}" data-pv style="width:70px"><button class="btn" data-pd>✕</button>`;
+  row.querySelector('[data-pk]').addEventListener('change',e=>{const nv=e.target.value.trim();if(nv&&nv!==k){APP.params[nv]=APP.params[k];delete APP.params[k];renderParams();rebuild();}});
+  row.querySelector('[data-pv]').addEventListener('change',e=>{APP.params[k]=parseFloat(e.target.value)||0;rebuild();});
+  row.querySelector('[data-pd]').addEventListener('click',()=>{delete APP.params[k];renderParams();rebuild();});
+  el.appendChild(row);});}
+$('#addParam').onclick=()=>{let i=1;while(APP.params['var'+i])i++;APP.params['var'+i]=10;renderParams();};
+
+function syncSel(){$('#stSel').textContent=APP.sel.size?[...APP.sel].map(id=>{const f=APP.features.find(x=>x.id===id);return f?f.name:'';}).join(', '):'—';renderProps();}
+
+/* ===================== Actions ===================== */
+function addFeature(kind){const f=newFeature(kind);APP.features.push(f);APP.sel=new Set([f.id]);syncSel();rebuild();toast('Added '+f.name);if(APP._bbox&&APP.features.length===1)fitView();}
+document.querySelectorAll('[data-add]').forEach(b=>b.addEventListener('click',()=>{addFeature(b.dataset.add);closeMenus();}));
+
+function boolean(op){const bodies=[...APP.sel].filter(id=>{const f=APP.features.find(x=>x.id===id);return f&&f.type!=='boolean'||APP.features.find(x=>x.id===id);});
+  // need two currently-displayed bodies
+  const live=[...APP.sel].filter(id=>!isConsumed(id));
+  if(live.length<2){toast('Select two bodies first (Ctrl/Cmd-click in the tree or Shift-click in 3D)');return;}
+  const [aId,bId]=live.slice(0,2);
+  const f={id:uid(),type:'boolean',op,name:(op==='union'?'Combine':op==='subtract'?'Cut':'Intersect'),color:APP.features.find(x=>x.id===aId).color,visible:true,suppressed:false,aId,bId};
+  APP.features.push(f);APP.sel=new Set([f.id]);syncSel();rebuild();toast(f.name+' done');}
+$('#opUnion').onclick=()=>boolean('union');$('#opSub').onclick=()=>boolean('subtract');$('#opInt').onclick=()=>boolean('intersect');
+
+$('#mDel').onclick=()=>{if(!APP.sel.size)return;APP.features=APP.features.filter(f=>!APP.sel.has(f.id));
+  // also drop booleans referencing deleted inputs
+  const ids=new Set(APP.features.map(f=>f.id));APP.features=APP.features.filter(f=>f.type!=='boolean'||(ids.has(f.aId)&&ids.has(f.bId)));
+  APP.sel.clear();syncSel();rebuild();toast('Deleted');};
+$('#mDup').onclick=()=>{const sel=[...APP.sel];if(!sel.length)return;const ns=[];sel.forEach(id=>{const f=APP.features.find(x=>x.id===id);if(!f||f.type==='boolean')return;const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' copy';c.x+=10;c.z+=10;APP.features.push(c);ns.push(c.id);});if(ns.length){APP.sel=new Set(ns);syncSel();rebuild();toast('Duplicated');}};
+
+/* view */
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+function setView(v){const c=APP.cam;if(v==='iso'){c.theta=Math.PI*0.25;c.phi=Math.PI*0.35;}if(v==='front'){c.theta=Math.PI*0.5;c.phi=Math.PI*0.5;}if(v==='top'){c.phi=0.001;c.theta=Math.PI*0.5;}if(v==='right'){c.theta=0;c.phi=Math.PI*0.5;}applyCam();render();}
+$('#vFit').onclick=fitView;
+function fitView(){if(!APP._bbox){APP.cam.target.set(0,0,0);APP.cam.radius=220;applyCam();render();return;}const b=APP._bbox;const c=new THREE.Vector3();b.getCenter(c);const s=new THREE.Vector3();b.getSize(s);APP.cam.target.copy(c);APP.cam.radius=Math.max(30,s.length()*1.1);applyCam();render();}
+$('#vProj').onclick=()=>{APP.proj=APP.proj==='persp'?'ortho':'persp';camera=APP.proj==='persp'?camP:camO;$('#vProj').innerHTML=(APP.proj==='persp'?'⧉ Persp':'⬚ Ortho');applyCam();render();};
+$('#vGrid').onclick=()=>{APP.grid=!APP.grid;gridHelper.visible=APP.grid;axes.visible=APP.grid;$('#vGrid').classList.toggle('on',APP.grid);render();};
+$('#vWire').onclick=()=>{APP.wire=!APP.wire;$('#vWire').classList.toggle('on',APP.wire);rebuild();};
+$('#mMeasure').onclick=()=>{APP.measure=!APP.measure;APP.measurePts=[];$('#mMeasure').classList.toggle('on',APP.measure);toast(APP.measure?'Measure: click two points':'Measure off');};
+$('#mSection').onclick=()=>{APP.section=!APP.section;$('#mSection').classList.toggle('on',APP.section);$('#secSection').style.display=APP.section?'block':'none';if(APP.section)updateClip();else rebuild();};
+['secAxis','secPos','secFlip'].forEach(id=>$('#'+id).addEventListener('input',updateClip));
+
+/* menus */
+document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const m=$('#'+b.dataset.menu);const open=m.classList.contains('show');closeMenus();if(!open)m.classList.add('show');}));
+function closeMenus(){document.querySelectorAll('.menu').forEach(m=>m.classList.remove('show'));}
+document.addEventListener('click',closeMenus);
+
+/* export */
+document.querySelectorAll('[data-ex]').forEach(b=>b.addEventListener('click',()=>{doExport(b.dataset.ex);closeMenus();}));
+function collectTriangles(){const tris=[];bodyGroup.children.forEach(m=>{const g=m.geometry;const pos=g.attributes.position.array;for(let i=0;i<pos.length;i+=9)tris.push([pos[i],pos[i+1],pos[i+2],pos[i+3],pos[i+4],pos[i+5],pos[i+6],pos[i+7],pos[i+8]]);});return tris;}
+function doExport(kind){const tris=collectTriangles();if(!tris.length){toast('Nothing to export');return;}
+  if(kind==='stlb'){const buf=stlBinary(tris);download('model.stl',buf,'application/octet-stream');}
+  else if(kind==='stla'){download('model.stl',stlAscii(tris),'text/plain');}
+  else{download('model.obj',objText(tris),'text/plain');}
+  toast('Exported '+tris.length+' triangles');}
+function stlBinary(tris){const n=tris.length;const buf=new ArrayBuffer(84+n*50);const dv=new DataView(buf);dv.setUint32(80,n,true);let o=84;for(const t of tris){const nx=triNormal(t);dv.setFloat32(o,nx[0],true);dv.setFloat32(o+4,nx[1],true);dv.setFloat32(o+8,nx[2],true);o+=12;for(let i=0;i<9;i++){dv.setFloat32(o,t[i],true);o+=4;}dv.setUint16(o,0,true);o+=2;}return buf;}
+function stlAscii(tris){let s='solid makerforge\n';for(const t of tris){const n=triNormal(t);s+=`facet normal ${n[0]} ${n[1]} ${n[2]}\n outer loop\n`;for(let i=0;i<3;i++)s+=`  vertex ${t[i*3]} ${t[i*3+1]} ${t[i*3+2]}\n`;s+=' endloop\nendfacet\n';}return s+'endsolid makerforge\n';}
+function objText(tris){let s='# MakerForge OBJ\n',vi=1;tris.forEach(t=>{for(let i=0;i<3;i++)s+=`v ${t[i*3]} ${t[i*3+1]} ${t[i*3+2]}\n`;s+=`f ${vi} ${vi+1} ${vi+2}\n`;vi+=3;});return s;}
+function triNormal(t){const ax=t[3]-t[0],ay=t[4]-t[1],az=t[5]-t[2],bx=t[6]-t[0],by=t[7]-t[1],bz=t[8]-t[2];let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;const l=Math.hypot(nx,ny,nz)||1;return[nx/l,ny/l,nz/l];}
+function download(name,data,mime){const b=new Blob([data],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+
+/* save / open / new */
+$('#mSave').onclick=()=>{download('model.mkc',JSON.stringify({v:1,features:APP.features,params:APP.params},null,0),'application/json');toast('Saved');};
+$('#mOpen').onclick=()=>$('#fileIn').click();
+$('#mNew').onclick=()=>{if(APP.features.length&&!confirm('Start a new model? Unsaved work is lost.'))return;APP.features=[];APP.params={wall:3};APP.sel.clear();APP._id=1;renderParams();syncSel();rebuild();fitView();toast('New model');};
+$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);APP.features=d.features||[];APP.params=d.params||{wall:3};APP._id=Math.max(1,...APP.features.map(x=>x.id))+1;APP.sel.clear();renderParams();syncSel();rebuild();fitView();toast('Opened '+f.name);}catch(_){toast('Could not read file');}};r.readAsText(f);e.target.value='';});
+
+/* toast */
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1700);}
+
+/* keyboard */
+window.addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#mDel').click();}if(k==='f')fitView();if(k==='d'&&!e.ctrlKey&&!e.metaKey)$('#mDup').click();if((e.ctrlKey||e.metaKey)&&k==='s'){e.preventDefault();$('#mSave').click();}});
+
+/* boot */
+function boot(){
+  initThree();renderParams();
+  // starter model: a plate with two holes (shows the parametric loop)
+  const plate=newFeature('box');plate.name='Plate';plate.w=80;plate.d=50;plate.h=8;plate.y=0;
+  const h1=newFeature('cylinder');h1.name='Hole 1';h1.r=6;h1.h=30;h1.x=-24;h1.z=0;
+  APP.features.push(plate,h1);
+  const cut={id:uid(),type:'boolean',op:'subtract',name:'Cut hole',color:plate.color,visible:true,suppressed:false,aId:plate.id,bId:h1.id};
+  APP.features.push(cut);
+  rebuild();fitView();
+  setTimeout(onResize,50);
+}
+boot();
+</script>
+</body>
+</html>

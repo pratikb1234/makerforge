@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BlockBuddy · Build in 3D! 🧊</title>
+<style>
+  :root{--bg:#eaf4ff;--panel:#fff;--ink:#22314a;--mut:#7d8aa3;--line:#dce7f5;
+    --a:#3fa9ff;--b:#ff7aa8;--c:#5ad197;--d:#ffca3a;--e:#a06bff;
+    --shadow:0 5px 0 rgba(34,49,74,.12);--shadow2:0 12px 34px rgba(34,49,74,.22)}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:"Baloo 2","Comic Sans MS","Segoe UI Rounded",-apple-system,sans-serif;font-weight:700;font-size:15px;-webkit-user-select:none;user-select:none}
+  .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+  .top{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--panel);border-bottom:3px solid var(--line);flex-wrap:wrap}
+  .logo{font-size:22px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .logo b{background:linear-gradient(90deg,var(--a),var(--e),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .kbtn{border:3px solid var(--line);border-radius:16px;padding:9px 14px;background:#fff;color:var(--ink);font-family:inherit;font-weight:800;font-size:15px;cursor:pointer;box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:7px;transition:transform .08s}
+  .kbtn:hover{transform:translateY(-2px)}.kbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(34,49,74,.12)}
+  .kbtn.round{width:50px;height:50px;justify-content:center;padding:0;font-size:22px}
+  .kbtn.on{background:var(--a);border-color:var(--a);color:#fff}
+  .kbtn.big{font-size:17px;padding:11px 18px}
+  .kbtn.grp{background:linear-gradient(180deg,#7be0a6,#4fc98a);border-color:#38b073;color:#053a22}
+  .kbtn.exp{background:linear-gradient(180deg,#ffd75e,#ffbe2e);border-color:#eaa100;color:#5a3d00}
+  .sp{flex:1}
+  .main{display:grid;grid-template-columns:1fr 132px;min-height:0}
+  .stage{position:relative;background:radial-gradient(circle at 50% 30%,#ffffff,#dcebfb)}
+  #gl{position:absolute;inset:0;display:block}
+  .hintbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#fff;border:3px solid var(--line);border-radius:20px;padding:8px 18px;box-shadow:var(--shadow);font-size:15px;pointer-events:none;max-width:80%;text-align:center}
+  .vbar{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;background:#fff;border:3px solid var(--line);border-radius:16px;padding:6px;box-shadow:var(--shadow)}
+  .vbar .kbtn{box-shadow:none;border-width:2px;padding:7px 10px}
+  .pal{background:var(--panel);border-left:3px solid var(--line);padding:12px 8px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;align-items:center}
+  .pal .t{font-size:12px;color:var(--mut);font-weight:800;text-transform:uppercase;letter-spacing:.5px}
+  .shape{width:108px;border:3px solid var(--line);background:#fff;border-radius:18px;padding:9px 4px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;box-shadow:var(--shadow);transition:transform .08s}
+  .shape:hover{transform:translateY(-3px);border-color:var(--a)}
+  .shape:active{transform:translateY(2px)}
+  .shape .ic{font-size:26px;line-height:1}.shape .nm{font-size:13px}
+  .shape.hole{background:repeating-linear-gradient(45deg,#f3f6fb,#f3f6fb 6px,#e9eef6 6px,#e9eef6 12px)}
+  /* floating property card (Tinkercad-style) */
+  .card{position:absolute;top:12px;right:150px;background:#fff;border:3px solid var(--line);border-radius:18px;padding:12px;box-shadow:var(--shadow2);width:200px;display:none}
+  .card.show{display:block}
+  .card h4{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .card .rr{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .card .rr label{width:52px;color:var(--mut);font-size:12px}
+  .card input[type=number]{width:100%;border:3px solid var(--line);border-radius:11px;padding:6px 8px;font-family:inherit;font-weight:700;font-size:13px}
+  .seg{display:flex;gap:6px;margin:6px 0}
+  .seg button{flex:1;border:3px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font-family:inherit;font-weight:800;cursor:pointer;font-size:13px}
+  .seg button.on{background:var(--a);border-color:var(--a);color:#fff}
+  .seg button.hole.on{background:#8894a8;border-color:#8894a8}
+  .sw{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .sw i{width:22px;height:22px;border-radius:7px;cursor:pointer;border:3px solid transparent}
+  .sw i.on{border-color:#22314a}
+  .bottom{display:flex;align-items:center;gap:14px;padding:7px 14px;background:var(--panel);border-top:3px solid var(--line);color:var(--mut);font-size:13px}
+  .bottom b{color:var(--ink)}
+  .toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%) scale(.85);background:#fff;border:4px solid var(--d);border-radius:22px;padding:12px 22px;box-shadow:var(--shadow2);font-size:18px;font-weight:800;z-index:80;opacity:0;transition:.22s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) scale(1)}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="logo">🧊 <b>BlockBuddy</b></div>
+    <button class="kbtn round" id="bNew" title="Start over">📄</button>
+    <button class="kbtn round" id="bUndo" title="Oops">↩️</button>
+    <button class="kbtn round" id="bRedo" title="Again">↪️</button>
+    <button class="kbtn round" id="bCopy" title="Twin">👯</button>
+    <button class="kbtn round" id="bDel" title="Remove">🗑️</button>
+    <button class="kbtn big grp" id="bGroup">🧲 Group</button>
+    <button class="kbtn big" id="bUngroup">✂️ Ungroup</button>
+    <div class="sp"></div>
+    <button class="kbtn round" id="bHelp" title="How to build">❓</button>
+    <button class="kbtn big exp" id="bExport">⬇ Save 3D file</button>
+  </div>
+
+  <div class="main">
+    <div class="stage" id="stage">
+      <canvas id="gl"></canvas>
+      <div class="hintbar" id="hint">👉 Tap a shape to add it. Then drag it around!</div>
+      <div class="vbar">
+        <button class="kbtn" id="vFit">🔍 Fit</button>
+        <button class="kbtn" id="vUp">⬆️ Up</button>
+        <button class="kbtn" id="vDown">⬇️ Down</button>
+        <button class="kbtn" id="vRot">🔄 Turn</button>
+        <button class="kbtn" id="vBig">➕ Bigger</button>
+        <button class="kbtn" id="vSmall">➖ Smaller</button>
+      </div>
+      <!-- property card -->
+      <div class="card" id="card">
+        <h4>My shape <span class="sw" style="margin:0"></span></h4>
+        <div class="seg"><button id="sgSolid" class="on">🟦 Solid</button><button id="sgHole" class="hole">🕳️ Hole</button></div>
+        <div class="rr"><label>Wide</label><input type="number" id="pW" step="1"></div>
+        <div class="rr"><label>Tall</label><input type="number" id="pH" step="1"></div>
+        <div class="rr"><label>Deep</label><input type="number" id="pD" step="1"></div>
+        <div class="sw" id="cardSw"></div>
+      </div>
+    </div>
+
+    <div class="pal" id="pal">
+      <div class="t">Solid</div>
+      <div class="shape" data-shape="box" data-hole="0"><div class="ic">🟦</div><div class="nm">Box</div></div>
+      <div class="shape" data-shape="cylinder" data-hole="0"><div class="ic">🥫</div><div class="nm">Cylinder</div></div>
+      <div class="shape" data-shape="sphere" data-hole="0"><div class="ic">🔵</div><div class="nm">Ball</div></div>
+      <div class="shape" data-shape="cone" data-hole="0"><div class="ic">🔺</div><div class="nm">Cone</div></div>
+      <div class="shape" data-shape="pyramid" data-hole="0"><div class="ic">🔻</div><div class="nm">Pyramid</div></div>
+      <div class="shape" data-shape="roof" data-hole="0"><div class="ic">🏠</div><div class="nm">Roof</div></div>
+      <div class="shape" data-shape="torus" data-hole="0"><div class="ic">🍩</div><div class="nm">Donut</div></div>
+      <div class="t">Hole</div>
+      <div class="shape hole" data-shape="box" data-hole="1"><div class="ic">⬜</div><div class="nm">Box hole</div></div>
+      <div class="shape hole" data-shape="cylinder" data-hole="1"><div class="ic">⭕</div><div class="nm">Round hole</div></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <span>Shapes: <b id="stN">0</b></span>
+    <span>Picked: <b id="stSel">none</b></span>
+    <div class="sp"></div>
+    <span>Drag to move • empty space + drag to spin the view • wheel to zoom</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" accept=".json,.bbud" style="display:none">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+/* ---------------- CSG kernel (MIT, Evan Wallace) — verified ---------------- */
+function CSG(){this.polygons=[];}CSG.fromPolygons=p=>{const c=new CSG();c.polygons=p;return c;};
+CSG.prototype={clone(){const c=new CSG();c.polygons=this.polygons.map(p=>p.clone());return c;},toPolygons(){return this.polygons;},
+ union(g){const a=new Nd(this.clone().polygons),b=new Nd(g.clone().polygons);a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());return CSG.fromPolygons(a.allPolygons());},
+ subtract(g){const a=new Nd(this.clone().polygons),b=new Nd(g.clone().polygons);a.invert();a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());a.invert();return CSG.fromPolygons(a.allPolygons());},
+ intersect(g){const a=new Nd(this.clone().polygons),b=new Nd(g.clone().polygons);a.invert();b.clipTo(a);b.invert();a.clipTo(b);b.clipTo(a);a.build(b.allPolygons());a.invert();return CSG.fromPolygons(a.allPolygons());}};
+function V3(x,y,z){this.x=x;this.y=y;this.z=z;}V3.prototype={clone(){return new V3(this.x,this.y,this.z);},negated(){return new V3(-this.x,-this.y,-this.z);},plus(a){return new V3(this.x+a.x,this.y+a.y,this.z+a.z);},minus(a){return new V3(this.x-a.x,this.y-a.y,this.z-a.z);},times(a){return new V3(this.x*a,this.y*a,this.z*a);},dot(a){return this.x*a.x+this.y*a.y+this.z*a.z;},lerp(a,t){return this.plus(a.minus(this).times(t));},length(){return Math.sqrt(this.dot(this));},unit(){return this.times(1/this.length());},cross(a){return new V3(this.y*a.z-this.z*a.y,this.z*a.x-this.x*a.z,this.x*a.y-this.y*a.x);}};
+function Vx(pos,n){this.pos=pos;this.normal=n;}Vx.prototype={clone(){return new Vx(this.pos.clone(),this.normal.clone());},flip(){this.normal=this.normal.negated();},interpolate(o,t){return new Vx(this.pos.lerp(o.pos,t),this.normal.lerp(o.normal,t));}};
+function Pl(n,w){this.normal=n;this.w=w;}Pl.EPS=1e-5;Pl.fromPoints=(a,b,c)=>{const n=b.minus(a).cross(c.minus(a)).unit();return new Pl(n,n.dot(a));};
+Pl.prototype={clone(){return new Pl(this.normal.clone(),this.w);},flip(){this.normal=this.normal.negated();this.w=-this.w;},
+ splitPolygon(pg,cf,cb,f,b){const CO=0,FR=1,BK=2,SP=3;let type=0;const ts=[];for(let i=0;i<pg.vertices.length;i++){const t=this.normal.dot(pg.vertices[i].pos)-this.w;const ty=t<-Pl.EPS?BK:t>Pl.EPS?FR:CO;type|=ty;ts.push(ty);}
+  switch(type){case CO:(this.normal.dot(pg.plane.normal)>0?cf:cb).push(pg);break;case FR:f.push(pg);break;case BK:b.push(pg);break;
+   case SP:{const ff=[],bb=[];for(let i=0;i<pg.vertices.length;i++){const j=(i+1)%pg.vertices.length,ti=ts[i],tj=ts[j],vi=pg.vertices[i],vj=pg.vertices[j];if(ti!=BK)ff.push(vi);if(ti!=FR)bb.push(ti!=BK?vi.clone():vi);if((ti|tj)==SP){const t=(this.w-this.normal.dot(vi.pos))/this.normal.dot(vj.pos.minus(vi.pos));const v=vi.interpolate(vj,t);ff.push(v);bb.push(v.clone());}}if(ff.length>=3)f.push(new Pg(ff));if(bb.length>=3)b.push(new Pg(bb));}break;}}};
+function Pg(v){this.vertices=v;this.plane=Pl.fromPoints(v[0].pos,v[1].pos,v[2].pos);}Pg.prototype={clone(){return new Pg(this.vertices.map(v=>v.clone()));},flip(){this.vertices.reverse().forEach(v=>v.flip());this.plane.flip();}};
+function Nd(pg){this.plane=null;this.front=null;this.back=null;this.polygons=[];if(pg)this.build(pg);}
+Nd.prototype={clone(){const n=new Nd();n.plane=this.plane&&this.plane.clone();n.front=this.front&&this.front.clone();n.back=this.back&&this.back.clone();n.polygons=this.polygons.map(p=>p.clone());return n;},
+ invert(){for(const p of this.polygons)p.flip();this.plane.flip();if(this.front)this.front.invert();if(this.back)this.back.invert();const t=this.front;this.front=this.back;this.back=t;},
+ clipPolygons(pg){if(!this.plane)return pg.slice();let f=[],b=[];for(const p of pg)this.plane.splitPolygon(p,f,b,f,b);if(this.front)f=this.front.clipPolygons(f);if(this.back)b=this.back.clipPolygons(b);else b=[];return f.concat(b);},
+ clipTo(n){this.polygons=n.clipPolygons(this.polygons);if(this.front)this.front.clipTo(n);if(this.back)this.back.clipTo(n);},
+ allPolygons(){let p=this.polygons.slice();if(this.front)p=p.concat(this.front.allPolygons());if(this.back)p=p.concat(this.back.allPolygons());return p;},
+ build(pg){if(!pg.length)return;if(!this.plane)this.plane=pg[0].plane.clone();const f=[],b=[];for(const p of pg)this.plane.splitPolygon(p,this.polygons,this.polygons,f,b);if(f.length){(this.front=this.front||new Nd()).build(f);}if(b.length){(this.back=this.back||new Nd()).build(b);}}};
+function csgFromGeometry(geom,matrix){let g=geom.index?geom.toNonIndexed():geom;const pos=g.attributes.position.array;const polys=[];for(let i=0;i<pos.length;i+=9){const p=[];for(let j=0;j<3;j++){const v=new THREE.Vector3(pos[i+j*3],pos[i+j*3+1],pos[i+j*3+2]);if(matrix)v.applyMatrix4(matrix);p.push(v);}const n=new THREE.Vector3().subVectors(p[1],p[0]).cross(new THREE.Vector3().subVectors(p[2],p[0]));if(n.lengthSq()<1e-14)continue;n.normalize();polys.push(new Pg(p.map(v=>new Vx(new V3(v.x,v.y,v.z),new V3(n.x,n.y,n.z)))));}return CSG.fromPolygons(polys);}
+function geometryFromCSG(csg){const positions=[],normals=[];csg.toPolygons().forEach(pg=>{for(let i=2;i<pg.vertices.length;i++){[0,i-1,i].forEach(k=>{const v=pg.vertices[k];positions.push(v.pos.x,v.pos.y,v.pos.z);normals.push(v.normal.x,v.normal.y,v.normal.z);});}});const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));g.computeVertexNormals();return g;}
+
+/* ===================== state ===================== */
+const APP={objs:[],sel:new Set(),_id:1,hist:[],hp:-1,cam:null};
+const uid=()=>APP._id++;
+const COLORS=['#3fa9ff','#ff7aa8','#5ad197','#ffca3a','#a06bff','#ff924c','#4fd6d6','#c0e152'];
+/* obj: {id,type,x,y,z,sx,sy,sz,rotY,color,hole, group:[members]} */
+function newObj(type,hole){const id=uid();const o={id,type,x:0,y:0,z:0,sx:20,sy:20,sz:20,rotY:0,color:COLORS[APP.objs.length%COLORS.length],hole:!!hole};
+  if(type==='sphere'||type==='cone'||type==='pyramid'||type==='cylinder'||type==='torus'){o.sz=o.sx;}
+  o.y=o.sy/2; // sit on plane
+  return o;}
+
+/* ---- geometry per shape (centered at origin, sized sx,sy,sz), y-up ---- */
+function shapeGeom(o){
+  let g;const sx=o.sx,sy=o.sy,sz=o.sz;
+  if(o.type==='box')g=new THREE.BoxGeometry(sx,sy,sz);
+  else if(o.type==='cylinder')g=new THREE.CylinderGeometry(sx/2,sx/2,sy,40);
+  else if(o.type==='sphere')g=new THREE.SphereGeometry(sx/2,36,24);
+  else if(o.type==='cone')g=new THREE.CylinderGeometry(0.001,sx/2,sy,40);
+  else if(o.type==='pyramid')g=new THREE.CylinderGeometry(0.001,sx/2,sy,4);
+  else if(o.type==='torus')g=new THREE.TorusGeometry(sx/2*0.72,sx/2*0.28,16,32);
+  else if(o.type==='roof'){g=roofGeom(sx,sy,sz);}
+  else g=new THREE.BoxGeometry(sx,sy,sz);
+  if(o.type==='torus')g.rotateX(Math.PI/2);
+  return g;
+}
+function roofGeom(w,h,d){ // triangular prism
+  const hw=w/2,hh=h/2,hd=d/2;
+  const v=[ -hw,-hh,-hd,  hw,-hh,-hd,  0,hh,-hd,  -hw,-hh,hd,  hw,-hh,hd,  0,hh,hd ];
+  const idx=[0,1,2, 3,5,4, 0,2,5,0,5,3, 1,4,5,1,5,2, 0,3,4,0,4,1];
+  const g=new THREE.BufferGeometry();g.setIndex(idx);g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g;
+}
+function objMatrix(o){const m=new THREE.Matrix4();m.makeRotationY((o.rotY||0)*Math.PI/180);m.setPosition(o.x,o.y,o.z);return m;}
+
+/* ===================== three ===================== */
+let scene,camera,renderer,grid,plane0,bodyGroup;
+function initThree(){
+  const st=$('#stage');scene=new THREE.Scene();scene.background=new THREE.Color(0xeaf4ff);
+  const w=st.clientWidth,h=st.clientHeight;
+  camera=new THREE.PerspectiveCamera(45,w/h,0.1,6000);
+  renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true});renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));renderer.setSize(w,h,false);
+  scene.add(new THREE.AmbientLight(0xffffff,.7));const d1=new THREE.DirectionalLight(0xffffff,.8);d1.position.set(60,120,80);scene.add(d1);const d2=new THREE.DirectionalLight(0xbcd6ff,.4);d2.position.set(-70,40,-50);scene.add(d2);
+  grid=new THREE.GridHelper(240,24,0x9cc4ef,0xcfe2f7);scene.add(grid);
+  // ground plane for ray-drag
+  plane0=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+  bodyGroup=new THREE.Group();scene.add(bodyGroup);
+  APP.cam={target:new THREE.Vector3(0,10,0),theta:Math.PI*0.25,phi:Math.PI*0.32,radius:160};
+  applyCam();bindInput();window.addEventListener('resize',onResize);
+}
+function applyCam(){const c=APP.cam;camera.position.set(c.target.x+c.radius*Math.sin(c.phi)*Math.cos(c.theta),c.target.y+c.radius*Math.cos(c.phi),c.target.z+c.radius*Math.sin(c.phi)*Math.sin(c.theta));camera.up.set(0,1,0);camera.lookAt(c.target);}
+function render(){renderer.render(scene,camera);}
+function onResize(){const st=$('#stage');const w=st.clientWidth,h=st.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();render();}
+
+function rebuild(){
+  while(bodyGroup.children.length)bodyGroup.remove(bodyGroup.children[0]);
+  APP.objs.forEach(o=>{
+    let g,isHole=false;
+    if(o.type==='group'){g=geometryFromCSG(groupCSG(o));}
+    else{g=shapeGeom(o);g.applyMatrix4(objMatrix(o));isHole=o.hole;}
+    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(isHole?0x9aa7ba:o.color),metalness:.05,roughness:.6,transparent:isHole,opacity:isHole?0.35:1,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(g,mat);mesh.userData.id=o.id;
+    if(APP.sel.has(o.id)){mesh.material.emissive=new THREE.Color(0x1b3a5a);mesh.material.emissiveIntensity=.6;
+      const eg=new THREE.EdgesGeometry(g);const line=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x22314a}));bodyGroup.add(line);}
+    bodyGroup.add(mesh);
+  });
+  $('#stN').textContent=APP.objs.length;render();
+}
+function groupCSG(grp){let solid=null,holes=[];grp.members.forEach(m=>{const g=shapeGeom(m);const mat=objMatrix(m);const c=csgFromGeometry(g,mat);if(m.hole)holes.push(c);else solid=solid?solid.union(c):c;});if(!solid)solid=holes.length?csgFromGeometry(new THREE.BoxGeometry(0.01,0.01,0.01)):CSG.fromPolygons([]);holes.forEach(h=>solid=solid.subtract(h));return solid;}
+
+/* ---------- input: orbit + drag-move ---------- */
+function bindInput(){const el=$('#gl');let mode=null,px=0,py=0,grab=null;
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);px=e.clientX;py=e.clientY;
+    const hit=pick(e);
+    if(e.button!==0||e.shiftKey||!hit){mode='orbit';APP._maybeDesel=!hit&&e.button===0&&!e.shiftKey;return;}
+    // select + start drag
+    if(!APP.sel.has(hit)){APP.sel=new Set([hit]);syncSel();rebuild();}
+    mode='move';const o=APP.objs.find(x=>x.id===hit);const p=rayToPlane(e);grab={ox:o.x,oz:o.z,gx:p.x,gz:p.z};beginHist();
+  });
+  el.addEventListener('pointermove',e=>{if(!mode)return;
+    if(mode==='orbit'){const dx=e.clientX-px,dy=e.clientY-py;px=e.clientX;py=e.clientY;const c=APP.cam;c.theta-=dx*0.01;c.phi=Math.max(0.06,Math.min(Math.PI-0.06,c.phi-dy*0.01));applyCam();render();APP._maybeDesel=false;}
+    else if(mode==='move'){const p=rayToPlane(e);const dx=p.x-grab.gx,dz=p.z-grab.gz;APP.sel.forEach(id=>{const o=APP.objs.find(x=>x.id===id);if(o){o.x=snap(grab.ox+dx);o.z=snap(grab.oz+dz);}});rebuild();syncCard();}
+  });
+  el.addEventListener('pointerup',e=>{if(mode==='move')pushHist();if(mode==='orbit'&&APP._maybeDesel){APP.sel.clear();syncSel();rebuild();}mode=null;grab=null;});
+  el.addEventListener('wheel',e=>{e.preventDefault();APP.cam.radius=Math.max(20,Math.min(1200,APP.cam.radius*(e.deltaY>0?1.1:1/1.1)));applyCam();render();},{passive:false});
+}
+function snap(v){return Math.round(v);}
+function ndc(e){const r=$('#gl').getBoundingClientRect();return new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);}
+function pick(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera);const hits=ray.intersectObjects(bodyGroup.children.filter(c=>c.userData.id!=null),false);return hits.length?hits[0].object.userData.id:null;}
+function rayToPlane(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera);const pt=new THREE.Vector3();ray.ray.intersectPlane(plane0,pt);return pt||new THREE.Vector3();}
+
+/* ---------- history ---------- */
+function snapshot(){return JSON.stringify({objs:APP.objs,_id:APP._id});}
+function beginHist(){APP._pre=snapshot();}
+function pushHist(){const s=APP._pre||snapshot();APP._pre=null;APP.hist=APP.hist.slice(0,APP.hp+1);APP.hist.push(s);if(APP.hist.length>80)APP.hist.shift();APP.hp=APP.hist.length-1;APP.hist.push(snapshot());APP.hp++;}
+function commit(){APP.hist=APP.hist.slice(0,APP.hp+1);APP.hist.push(snapshot());if(APP.hist.length>80)APP.hist.shift();APP.hp=APP.hist.length-1;}
+function restore(s){const d=JSON.parse(s);APP.objs=d.objs;APP._id=d._id;APP.sel.clear();syncSel();rebuild();}
+function undo(){if(APP.hp>0){APP.hp--;restore(APP.hist[APP.hp]);toast('↩️ Undo');}else toast('Nothing to undo');}
+function redo(){if(APP.hp<APP.hist.length-1){APP.hp++;restore(APP.hist[APP.hp]);toast('↪️ Redo');}}
+
+/* ---------- palette ---------- */
+$('#pal').addEventListener('click',e=>{const b=e.target.closest('.shape');if(!b)return;addShape(b.dataset.shape,b.dataset.hole==='1');});
+function addShape(type,hole){const o=newObj(type,hole);APP.objs.push(o);APP.sel=new Set([o.id]);commit();syncSel();rebuild();cheer();hintOnce('👆 Drag it to move. Use the card on the right to resize!');if(APP.objs.length===1)fit();}
+
+/* ---------- toolbar ---------- */
+$('#bDel').onclick=()=>{if(!APP.sel.size){toast('Pick a shape first 👆');return;}APP.objs=APP.objs.filter(o=>!APP.sel.has(o.id));APP.sel.clear();commit();syncSel();rebuild();toast('🗑️ Removed');};
+$('#bCopy').onclick=()=>{if(!APP.sel.size){toast('Pick a shape first 👆');return;}const ns=[];[...APP.sel].forEach(id=>{const o=APP.objs.find(x=>x.id===id);const c=JSON.parse(JSON.stringify(o));c.id=uid();c.x+=12;c.z+=12;if(c.members)c.members.forEach(m=>m.id=uid());APP.objs.push(c);ns.push(c.id);});APP.sel=new Set(ns);commit();syncSel();rebuild();toast('👯 Twins!');};
+$('#bGroup').onclick=()=>{const ids=[...APP.sel];if(ids.length<2){toast('Pick 2+ shapes (Shift-click) then Group 🧲');return;}
+  const members=[];ids.forEach(id=>{const o=APP.objs.find(x=>x.id===id);if(o.type==='group')members.push(...o.members);else members.push(o);});
+  const g={id:uid(),type:'group',color:members.find(m=>!m.hole)?.color||COLORS[0],members:JSON.parse(JSON.stringify(members))};
+  APP.objs=APP.objs.filter(o=>!APP.sel.has(o.id));APP.objs.push(g);APP.sel=new Set([g.id]);commit();syncSel();rebuild();toast('🧲 Grouped!');};
+$('#bUngroup').onclick=()=>{const groups=[...APP.sel].map(id=>APP.objs.find(x=>x.id===id)).filter(o=>o&&o.type==='group');if(!groups.length){toast('Pick a grouped shape ✂️');return;}groups.forEach(g=>{const idx=APP.objs.indexOf(g);const ms=g.members.map(m=>{m=JSON.parse(JSON.stringify(m));m.id=uid();return m;});APP.objs.splice(idx,1,...ms);ms.forEach(m=>APP.sel.add(m.id));APP.sel.delete(g.id);});commit();syncSel();rebuild();toast('✂️ Ungrouped');};
+$('#bUndo').onclick=undo;$('#bRedo').onclick=redo;
+$('#bNew').onclick=()=>{if(APP.objs.length&&!confirm('Start a brand new build? 🧽'))return;APP.objs=[];APP.sel.clear();APP._id=1;commit();syncSel();rebuild();fit();toast('✨ Fresh!');};
+
+/* view buttons */
+$('#vFit').onclick=fit;
+$('#vUp').onclick=()=>nudgeY(2);$('#vDown').onclick=()=>nudgeY(-2);
+function nudgeY(d){if(!APP.sel.size){toast('Pick a shape 👆');return;}beginHist();APP.sel.forEach(id=>{const o=APP.objs.find(x=>x.id===id);if(o)o.y=Math.max(0.5,(o.y||0)+d);});pushHist();rebuild();}
+$('#vRot').onclick=()=>{if(!APP.sel.size){toast('Pick a shape 👆');return;}beginHist();APP.sel.forEach(id=>{const o=APP.objs.find(x=>x.id===id);if(o)o.rotY=((o.rotY||0)+45)%360;});pushHist();rebuild();toast('🔄 Turned 45°');};
+$('#vBig').onclick=()=>scaleSel(1.2);$('#vSmall').onclick=()=>scaleSel(1/1.2);
+function scaleSel(f){if(!APP.sel.size){toast('Pick a shape 👆');return;}beginHist();APP.sel.forEach(id=>{const o=APP.objs.find(x=>x.id===id);if(o&&o.type!=='group'){o.sx=Math.max(2,Math.round(o.sx*f));o.sy=Math.max(2,Math.round(o.sy*f));o.sz=Math.max(2,Math.round(o.sz*f));o.y=Math.max(o.sy/2,o.y);}});pushHist();rebuild();syncCard();}
+function fit(){if(!APP.objs.length){APP.cam.target.set(0,10,0);APP.cam.radius=160;applyCam();render();return;}const box=new THREE.Box3();bodyGroup.children.forEach(m=>{if(m.geometry){m.geometry.computeBoundingBox();box.union(m.geometry.boundingBox);}});const c=new THREE.Vector3();box.getCenter(c);const s=new THREE.Vector3();box.getSize(s);APP.cam.target.copy(c);APP.cam.radius=Math.max(50,s.length()*1.2);applyCam();render();}
+
+/* ---------- property card ---------- */
+function syncSel(){$('#stSel').textContent=APP.sel.size?(APP.sel.size+' shape'+(APP.sel.size>1?'s':'')):'none';syncCard();}
+function syncCard(){const card=$('#card');const ids=[...APP.sel];if(ids.length!==1){card.classList.remove('show');return;}const o=APP.objs.find(x=>x.id===ids[0]);if(!o){card.classList.remove('show');return;}card.classList.add('show');
+  const grp=o.type==='group';
+  $('#sgSolid').classList.toggle('on',!o.hole&&!grp);$('#sgHole').classList.toggle('on',!!o.hole);
+  $('#sgSolid').style.opacity=grp?.4:1;$('#sgHole').style.opacity=grp?.4:1;
+  $('#pW').value=grp?'':o.sx;$('#pH').value=grp?'':o.sy;$('#pD').value=grp?'':o.sz;
+  ['pW','pH','pD'].forEach(id=>$('#'+id).disabled=grp);
+  // color swatches
+  const sw=$('#cardSw');sw.innerHTML='';COLORS.forEach(c=>{const i=document.createElement('i');i.style.background=c;if(o.color===c)i.classList.add('on');i.onclick=()=>{beginHist();o.color=c;if(o.members)o.members.forEach(m=>{if(!m.hole)m.color=c;});pushHist();rebuild();syncCard();};sw.appendChild(i);});
+}
+$('#sgSolid').onclick=()=>setHole(false);$('#sgHole').onclick=()=>setHole(true);
+function setHole(h){const ids=[...APP.sel];if(ids.length!==1)return;const o=APP.objs.find(x=>x.id===ids[0]);if(!o||o.type==='group')return;beginHist();o.hole=h;pushHist();rebuild();syncCard();}
+['pW','pH','pD'].forEach((id,i)=>$('#'+id).addEventListener('change',e=>{const ids=[...APP.sel];if(ids.length!==1)return;const o=APP.objs.find(x=>x.id===ids[0]);if(!o||o.type==='group')return;beginHist();const v=Math.max(2,parseFloat(e.target.value)||2);if(i===0)o.sx=v;if(i===1){o.sy=v;o.y=Math.max(v/2,o.y);}if(i===2)o.sz=v;pushHist();rebuild();}));
+
+/* ---------- export STL ---------- */
+$('#bExport').onclick=()=>{const tris=[];bodyGroup.children.forEach(m=>{if(!m.geometry||m.userData.id==null)return;const o=APP.objs.find(x=>x.id===m.userData.id);if(o&&o.hole)return;const pos=m.geometry.attributes.position.array;for(let i=0;i<pos.length;i+=9)tris.push([pos[i],pos[i+1],pos[i+2],pos[i+3],pos[i+4],pos[i+5],pos[i+6],pos[i+7],pos[i+8]]);});
+  if(!tris.length){toast('Build something first! 🧱');return;}
+  const n=tris.length,buf=new ArrayBuffer(84+n*50),dv=new DataView(buf);dv.setUint32(80,n,true);let of=84;for(const t of tris){const nx=triN(t);dv.setFloat32(of,nx[0],true);dv.setFloat32(of+4,nx[1],true);dv.setFloat32(of+8,nx[2],true);of+=12;for(let i=0;i<9;i++){dv.setFloat32(of,t[i],true);of+=4;}dv.setUint16(of,0,true);of+=2;}
+  download('my-model.stl',buf,'application/octet-stream');toast('⬇ Saved my-model.stl! 🎉');confetti();};
+function triN(t){const ax=t[3]-t[0],ay=t[4]-t[1],az=t[5]-t[2],bx=t[6]-t[0],by=t[7]-t[1],bz=t[8]-t[2];let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;const l=Math.hypot(nx,ny,nz)||1;return[nx/l,ny/l,nz/l];}
+function download(name,data,mime){const b=new Blob([data],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+
+/* help */
+$('#bHelp').onclick=()=>toast('Tap a shape ▸ drag to move ▸ use the card to resize ▸ add a Hole and Group 🧲 to cut holes!');
+
+/* keyboard */
+window.addEventListener('keydown',e=>{if(/input|select/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#bDel').click();}if(k==='r')$('#vRot').click();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();}if(k==='arrowup')nudgeY(2);if(k==='arrowdown')nudgeY(-2);if(k==='f')fit();});
+
+/* fun */
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1600);}
+const cheers=['Nice! 🎉','Cool! 😎','Yay! ⭐','Awesome! 🚀','Wow! ✨'];function cheer(){toast(cheers[Math.floor(Math.random()*cheers.length)]);}
+let hintedSet={};function hintOnce(m){if(hintedSet[m])return;hintedSet[m]=1;$('#hint').textContent=m;}
+function confetti(){for(let i=0;i<50;i++){const d=document.createElement('div');d.textContent=['🎉','⭐','✨','🧊','🔵'][i%5];d.style.cssText=`position:fixed;left:${Math.random()*100}vw;top:-30px;font-size:${16+Math.random()*16}px;z-index:120;pointer-events:none`;document.body.appendChild(d);const du=1600+Math.random()*1200;d.animate([{transform:'translateY(0)',opacity:1},{transform:'translateY(105vh) rotate('+(Math.random()*720-360)+'deg)',opacity:.9}],{duration:du,easing:'ease-in'});setTimeout(()=>d.remove(),du);}}
+
+/* boot */
+function boot(){initThree();
+  // starter: a house-ish stack
+  const base=newObj('box');base.sx=40;base.sy=24;base.sz=40;base.y=12;base.color='#3fa9ff';
+  const roof=newObj('roof');roof.sx=44;roof.sy=20;roof.sz=44;roof.y=34;roof.color='#ff7aa8';
+  APP.objs.push(base,roof);commit();rebuild();fit();
+  $('#hint').textContent='👉 Tap a shape on the right to add it. Then drag to move!';
+  setTimeout(onResize,60);
+}
+boot();
+</script>
+</body>
+</html>

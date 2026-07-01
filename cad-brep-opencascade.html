@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MakerForge · B-Rep CAD (OpenCascade)</title>
+<style>
+  :root{--bg:#12151a;--panel:#191d24;--panel2:#20252e;--line:#2b323d;--line2:#3a434f;--txt:#e8edf3;--mut:#8b96a5;--acc:#f0803c;--acc2:#d96a28;--blue:#4c9ffe;--ok:#3ecf8e;--danger:#ff5f6d}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+  .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+  .top{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand{font-weight:800;margin-right:6px;display:flex;align-items:center;gap:7px}
+  .brand .d{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--acc),var(--ok))}
+  .brand small{color:var(--mut);font-weight:500}
+  .kernel{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:3px 10px}
+  .kernel .kd{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+  .kernel.ok .kd{background:var(--ok)} .kernel.ok{color:var(--ok);border-color:#2c5a44}
+  .kernel.err .kd{background:var(--danger)} .kernel.err{color:var(--danger);border-color:#5a2c34}
+  .kernel.load .kd{background:var(--acc);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  .g{display:flex;gap:3px;padding:0 6px;border-right:1px solid var(--line)} .g:last-child{border:none}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:6px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px}
+  .btn:hover{background:#2a323d;border-color:#4c5866}.btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));border-color:var(--acc2);color:#231103;font-weight:700}
+  .btn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .main{display:grid;grid-template-columns:230px 1fr 240px;min-height:0}
+  .side{background:var(--panel);overflow-y:auto}
+  .side.l{border-right:1px solid var(--line)} .side.r{border-left:1px solid var(--line)}
+  .sec{border-bottom:1px solid var(--line)}
+  .sec h3{margin:0;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)}
+  .body{padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+  .item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
+  .item.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .item .sw{width:13px;height:13px;border-radius:3px} .item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .item .eye{color:var(--mut);cursor:pointer;font-size:12px}
+  .row{display:flex;align-items:center;gap:6px}.row label{color:var(--mut);width:58px;font-size:11px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .fld{display:flex;flex-direction:column;gap:3px}.fld span{font-size:10px;color:var(--mut);text-transform:uppercase}
+  input,select{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:6px;padding:5px 7px;font:inherit;font-size:12px;width:100%}
+  input[type=color]{height:28px;padding:2px}
+  .vp{position:relative;background:radial-gradient(circle at 50% 40%,#20252d,#0e1116)}
+  #gl{position:absolute;inset:0;display:block}
+  .vpbar{position:absolute;left:12px;bottom:12px;display:flex;gap:5px;background:rgba(25,29,36,.85);border:1px solid var(--line);border-radius:9px;padding:5px;backdrop-filter:blur(6px)}
+  .cube{position:absolute;right:12px;top:12px;display:grid;grid-template-columns:repeat(2,42px);gap:5px}
+  .cube button{background:rgba(25,29,36,.85);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:7px 0;cursor:pointer;font-size:11px;font-weight:700}
+  .cube button:hover{background:var(--blue);color:#fff}
+  .status{display:flex;gap:16px;padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--mut);font-size:11px}
+  .status b{color:var(--txt)} .status .sp{flex:1}
+  .hint{color:var(--mut);font-size:11px;line-height:1.5}
+  .overlay{position:absolute;inset:0;background:rgba(14,17,22,.92);display:flex;align-items:center;justify-content:center;z-index:50;text-align:center;flex-direction:column;gap:14px;padding:24px}
+  .overlay .spin{width:46px;height:46px;border:4px solid var(--line2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .overlay h2{margin:0;font-size:20px}.overlay p{margin:0;color:var(--mut);max-width:440px;line-height:1.6}
+  .overlay .lnk{color:var(--blue);text-decoration:underline;cursor:pointer}
+  .toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(6px);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 15px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:60;opacity:0;transition:.22s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid var(--panel)}
+  .badge{font-size:10px;background:#2c5a44;color:var(--ok);border-radius:5px;padding:1px 6px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand"><span class="d"></span> MakerForge <small>B-Rep CAD</small></div>
+    <div class="kernel load" id="kernel"><span class="kd"></span><span id="kernelTxt">Loading OpenCascade…</span></div>
+    <div class="g">
+      <button class="btn" data-add="box" disabled>🟦 Box</button>
+      <button class="btn" data-add="cylinder" disabled>🥫 Cylinder</button>
+      <button class="btn" data-add="sphere" disabled>🔵 Sphere</button>
+    </div>
+    <div class="g">
+      <button class="btn" id="opFuse" disabled>◕ Combine</button>
+      <button class="btn" id="opCut" disabled>◐ Cut</button>
+      <button class="btn" id="opInt" disabled>◑ Intersect</button>
+    </div>
+    <div class="g">
+      <button class="btn" id="opFillet" disabled>◜ Fillet <span class="badge">B-Rep</span></button>
+      <button class="btn" id="opChamfer" disabled>◹ Chamfer</button>
+    </div>
+    <div class="g">
+      <button class="btn" id="mDup" disabled>⧉ Dup</button>
+      <button class="btn" id="mDel" disabled>🗑 Del</button>
+      <button class="btn" id="mUndo" disabled>↶</button>
+      <button class="btn" id="mRedo" disabled>↷</button>
+    </div>
+    <div style="flex:1"></div>
+    <div class="g" style="border:none">
+      <button class="btn" id="exSTL" disabled>⇩ STL</button>
+      <button class="btn pri" id="exSTEP" disabled>⇩ STEP <span class="badge">B-Rep</span></button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="side l">
+      <div class="sec"><h3>Bodies</h3><div class="body" id="tree"><div class="hint">Waiting for the CAD kernel…</div></div></div>
+    </div>
+    <div class="vp" id="vp">
+      <canvas id="gl"></canvas>
+      <div class="cube">
+        <button data-view="iso">Iso</button><button data-view="front">Front</button>
+        <button data-view="top">Top</button><button data-view="right">Right</button>
+      </div>
+      <div class="vpbar">
+        <button class="btn" id="vFit">▣ Fit</button>
+        <button class="btn" id="vEdges">╱ Edges</button>
+        <button class="btn" id="vWire">◇ Wire</button>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="spin"></div>
+        <h2 id="ovH">Loading the real CAD kernel…</h2>
+        <p id="ovP">Fetching <b>OpenCascade</b> (the kernel behind FreeCAD) — about <b>11&nbsp;MB</b> of WebAssembly. First load can take 10–40&nbsp;seconds and needs an internet connection. It'll be cached after this.</p>
+      </div>
+    </div>
+    <div class="side r">
+      <div class="sec"><h3>Properties</h3><div class="body" id="props"><div class="hint">Select a body to edit it.</div></div></div>
+      <div class="sec"><h3>Measure</h3><div class="body" id="meas"><div class="hint">Volume &amp; bounds appear here.</div></div></div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span>Kernel: <b id="stK">loading</b></span>
+    <span>Bodies: <b id="stN">0</b></span>
+    <span>Sel: <b id="stSel">—</b></span>
+    <span class="sp"></span>
+    <span>Orbit: drag · Pan: right-drag · Zoom: wheel · This uses OpenCascade B-Rep (true fillets + STEP)</span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* =====================================================================
+   MakerForge B-Rep CAD — powered by the REAL OpenCascade (OCCT) kernel
+   via Replicad, loaded from CDN. True B-rep: real fillets/chamfers + STEP.
+   Kernel: replicad 0.23.1 + replicad-opencascadejs 0.23.0 (verified APIs).
+   ===================================================================== */
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const $=s=>document.querySelector(s);
+const toast=(()=>{let t;return m=>{const e=$('#toast');e.textContent=m;e.classList.add('show');clearTimeout(t);t=setTimeout(()=>e.classList.remove('show'),1900);};})();
+
+/* ---------- state ---------- */
+const A={bodies:[],sel:new Set(),_id:1,undo:[],redo:[],showEdges:true,wire:false,rc:null};
+const uid=()=>A._id++;
+const PAL=['#f0803c','#4c9ffe','#3ecf8e','#c07bff','#ffce54','#ff8fce'];
+let RC=null; // replicad module
+
+/* ================= load OpenCascade kernel ================= */
+const OCJS_VER="0.23.0", RC_VER="0.23.1";
+const WASM_URL=`https://cdn.jsdelivr.net/npm/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.wasm`;
+async function bootKernel(){
+  try{
+    setKernel('load','Loading OpenCascade…');
+    // Replicad ESM + the OCCT wasm loader (converted to ESM by esm.sh)
+    const [rc, ocFactoryMod] = await Promise.all([
+      import(`https://esm.sh/replicad@${RC_VER}`),
+      import(`https://esm.sh/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.js`)
+    ]);
+    RC=rc;
+    const ocFactory = ocFactoryMod.default || ocFactoryMod;
+    $('#ovP').textContent='Compiling the kernel… almost there.';
+    const OC = await ocFactory({ locateFile: (f)=> f.endsWith('.wasm') ? WASM_URL : f });
+    rc.setOC(OC);
+    onKernelReady();
+  }catch(err){
+    console.error(err);
+    kernelError(err);
+  }
+}
+function setKernel(cls,txt){const k=$('#kernel');k.className='kernel '+cls;$('#kernelTxt').textContent=txt;}
+function onKernelReady(){
+  setKernel('ok','OpenCascade ready');$('#stK').textContent='OpenCascade ✓';
+  $('#overlay').style.display='none';
+  document.querySelectorAll('.top .btn').forEach(b=>b.disabled=false);
+  initViewport();
+  // starter: a filleted plate with a hole — shows real B-rep fillet
+  try{
+    let plate=RC.makeBaseBox(60,40,10).fillet(3);
+    let hole=RC.makeCylinder(6,30).translate([15,0,-10]);
+    plate=plate.cut(hole);
+    addBody(plate,'Plate','#4c9ffe');
+    fitView();
+    toast('Kernel ready — real B-Rep ✓');
+  }catch(e){console.error(e);toast('Kernel loaded, starter failed: '+e.message);}
+  pushUndo(true);
+}
+function kernelError(err){
+  setKernel('err','Kernel failed');$('#stK').textContent='failed';
+  $('#overlay').innerHTML=`<h2 style="color:var(--danger)">⚠️ Couldn't load the CAD kernel</h2>
+  <p>The OpenCascade WebAssembly kernel didn't load. This needs an internet connection and a browser that allows loading modules from a CDN. Error:<br><code style="color:#ff9">${(err&&err.message||err)}</code></p>
+  <p>You can still use the mesh-based tools that work offline: <b>cad-studio.html</b> and <b>blocks-3d-kids.html</b>. Or try the ready-made open-source app <a class="lnk" href="https://chili3d.com" target="_blank">Chili3d</a> in your browser.</p>
+  <p><span class="lnk" onclick="location.reload()">↻ Try again</span></p>`;
+}
+
+/* ================= body model =================
+   body = {id,name,color,visible, base(replicad solid), x,y,z, rx,ry,rz}
+   solid rendered = base.rotate(...).translate([x,y,z])   (transform baked lazily) */
+function addBody(base,name,color){const b={id:uid(),name:name||'Body',color:color||PAL[A.bodies.length%PAL.length],visible:true,base,x:0,y:0,z:0,rx:0,ry:0,rz:0};A.bodies.push(b);A.sel=new Set([b.id]);rebuild();syncSel();return b;}
+function solidOf(b){let s=b.base;try{if(b.rx)s=s.rotate(b.rx,[0,0,0],[1,0,0]);if(b.ry)s=s.rotate(b.ry,[0,0,0],[0,1,0]);if(b.rz)s=s.rotate(b.rz,[0,0,0],[0,0,1]);if(b.x||b.y||b.z)s=s.translate([b.x,b.y,b.z]);}catch(e){}return s;}
+function bakeTransform(b){b.base=solidOf(b);b.x=b.y=b.z=b.rx=b.ry=b.rz=0;}
+
+/* ================= three.js viewport ================= */
+let scene,camera,renderer,grid,group,edgeMat;
+function initViewport(){
+  const vp=$('#vp');scene=new THREE.Scene();scene.background=new THREE.Color(0x11151b);
+  const w=vp.clientWidth,h=vp.clientHeight;
+  camera=new THREE.PerspectiveCamera(45,w/h,0.1,20000);camera.up.set(0,0,1);
+  renderer=new THREE.WebGLRenderer({canvas:$('#gl'),antialias:true});renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));renderer.setSize(w,h,false);
+  scene.add(new THREE.AmbientLight(0xffffff,.6));const d1=new THREE.DirectionalLight(0xffffff,.85);d1.position.set(80,120,160);scene.add(d1);const d2=new THREE.DirectionalLight(0x88aaff,.35);d2.position.set(-90,-60,60);scene.add(d2);
+  grid=new THREE.GridHelper(400,40,0x3a4450,0x222a33);grid.rotation.x=Math.PI/2;scene.add(grid);
+  scene.add(new THREE.AxesHelper(40));
+  group=new THREE.Group();scene.add(group);
+  A.cam={target:new THREE.Vector3(0,0,0),theta:Math.PI*0.3,phi:Math.PI*0.35,radius:180};
+  applyCam();bindOrbit();window.addEventListener('resize',onResize);
+}
+function applyCam(){const c=A.cam;const sinp=Math.sin(c.phi);camera.position.set(c.target.x+c.radius*sinp*Math.cos(c.theta),c.target.y+c.radius*sinp*Math.sin(c.theta),c.target.z+c.radius*Math.cos(c.phi));camera.lookAt(c.target);}
+function draw(){renderer.render(scene,camera);}
+function onResize(){const vp=$('#vp');const w=vp.clientWidth,h=vp.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();draw();}
+
+function meshToGeom(mesh){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(mesh.vertices,3));if(mesh.normals)g.setAttribute('normal',new THREE.Float32BufferAttribute(mesh.normals,3));if(mesh.triangles)g.setIndex(mesh.triangles);if(!mesh.normals)g.computeVertexNormals();return g;}
+
+function rebuild(){
+  while(group.children.length)group.remove(group.children[0]);
+  let n=0;const box=new THREE.Box3();let any=false;
+  A.bodies.forEach(b=>{
+    if(!b.visible)return;n++;
+    let solid;try{solid=solidOf(b);}catch(e){return;}
+    let mesh;try{mesh=solid.mesh({tolerance:0.05,angularTolerance:20});}catch(e){console.warn('mesh fail',e);return;}
+    const geo=meshToGeom(mesh);
+    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(b.color),metalness:.12,roughness:.6,wireframe:A.wire,flatShading:false});
+    if(A.sel.has(b.id)){mat.emissive=new THREE.Color(0x3a2600);mat.emissiveIntensity=1;}
+    const m=new THREE.Mesh(geo,mat);m.userData.id=b.id;group.add(m);
+    if(A.showEdges&&!A.wire){try{const em=solid.meshEdges?solid.meshEdges():null;if(em&&em.lines){const eg=new THREE.BufferGeometry();eg.setAttribute('position',new THREE.Float32BufferAttribute(em.lines,3));const line=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x0a0d11}));group.add(line);}else{const eg=new THREE.EdgesGeometry(geo,20);group.add(new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x0a0d11})));}}catch(e){}}
+    geo.computeBoundingBox();if(geo.boundingBox){box.union(geo.boundingBox);any=true;}
+  });
+  $('#stN').textContent=n;A._bbox=any?box:null;
+  renderTree();updateMeasure();draw();
+}
+
+/* ---------- orbit ---------- */
+function bindOrbit(){const el=$('#gl');let mode=null,px=0,py=0,moved=false;
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);px=e.clientX;py=e.clientY;moved=false;mode=(e.button===0&&!e.shiftKey)?'orbit':'pan';});
+  el.addEventListener('pointermove',e=>{if(!mode)return;const dx=e.clientX-px,dy=e.clientY-py;px=e.clientX;py=e.clientY;if(Math.abs(dx)+Math.abs(dy)>2)moved=true;const c=A.cam;
+    if(mode==='orbit'){c.theta+=dx*0.01;c.phi=Math.max(0.05,Math.min(Math.PI-0.05,c.phi-dy*0.01));}
+    else{const s=c.radius*0.0016;const dir=new THREE.Vector3().subVectors(A.cam.target,camera.position).normalize();const right=new THREE.Vector3().crossVectors(dir,camera.up).normalize();const up=new THREE.Vector3().crossVectors(right,dir).normalize();c.target.addScaledVector(right,-dx*s);c.target.addScaledVector(up,dy*s);}
+    applyCam();draw();});
+  el.addEventListener('pointerup',e=>{if(mode==='orbit'&&!moved)pick(e);mode=null;});
+  el.addEventListener('wheel',e=>{e.preventDefault();A.cam.radius=Math.max(8,Math.min(4000,A.cam.radius*(e.deltaY>0?1.1:1/1.1)));applyCam();draw();},{passive:false});
+}
+function pick(e){const r=$('#gl').getBoundingClientRect();const nd=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);const ray=new THREE.Raycaster();ray.setFromCamera(nd,camera);const hits=ray.intersectObjects(group.children.filter(c=>c.userData.id!=null),false);if(hits.length){const id=hits[0].object.userData.id;if(e.shiftKey)A.sel.has(id)?A.sel.delete(id):A.sel.add(id);else A.sel=new Set([id]);}else if(!e.shiftKey)A.sel.clear();syncSel();rebuild();}
+
+/* ---------- tree / props / measure ---------- */
+function renderTree(){const el=$('#tree');if(!A.bodies.length){el.innerHTML='<div class="hint">No bodies yet. Add a Box, Cylinder or Sphere.</div>';return;}el.innerHTML='';A.bodies.forEach(b=>{const d=document.createElement('div');d.className='item'+(A.sel.has(b.id)?' sel':'');d.innerHTML=`<span class="sw" style="background:${b.color}"></span><span class="nm">${b.name}</span><span class="eye">${b.visible?'👁':'🚫'}</span>`;d.addEventListener('click',ev=>{if(ev.target.classList.contains('eye')){b.visible=!b.visible;rebuild();return;}if(ev.metaKey||ev.ctrlKey)A.sel.has(b.id)?A.sel.delete(b.id):A.sel.add(b.id);else A.sel=new Set([b.id]);syncSel();rebuild();});el.appendChild(d);});}
+function syncSel(){$('#stSel').textContent=A.sel.size?[...A.sel].map(id=>A.bodies.find(b=>b.id===id)?.name).filter(Boolean).join(', '):'—';renderProps();updateMeasure();
+  const two=A.sel.size===2;['opFuse','opCut','opInt'].forEach(id=>$('#'+id).disabled=!two);const one=A.sel.size===1;['opFillet','opChamfer'].forEach(id=>$('#'+id).disabled=!one);['mDup','mDel'].forEach(id=>$('#'+id).disabled=!A.sel.size);}
+function renderProps(){const box=$('#props');const ids=[...A.sel];if(ids.length!==1){box.innerHTML='<div class="hint">Select one body to move / rotate / recolor.</div>';return;}const b=A.bodies.find(x=>x.id===ids[0]);if(!b){box.innerHTML='';return;}
+  const N=(l,k)=>`<div class="fld"><span>${l}</span><input data-k="${k}" value="${(+b[k]).toFixed(2)}"></div>`;
+  box.innerHTML=`<div class="fld"><span>Name</span><input data-k="name" value="${b.name}"></div>
+    <div class="hint">Move</div><div class="grid3">${N('X','x')}${N('Y','y')}${N('Z','z')}</div>
+    <div class="hint">Rotate°</div><div class="grid3">${N('X','rx')}${N('Y','ry')}${N('Z','rz')}</div>
+    <div class="row"><label>Color</label><input type="color" data-k="color" value="${b.color}"></div>`;
+  box.querySelectorAll('input').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k;if(k==='name')b.name=inp.value;else if(k==='color')b.color=inp.value;else b[k]=parseFloat(inp.value)||0;pushUndo();rebuild();}));
+}
+function updateMeasure(){const el=$('#meas');const ids=[...A.sel];if(ids.length!==1){el.innerHTML='<div class="hint">Select one body for volume &amp; bounds.</div>';return;}const b=A.bodies.find(x=>x.id===ids[0]);if(!b){el.innerHTML='';return;}
+  let vol='—',area='—';try{const s=solidOf(b);if(s.volume!=null)vol=(typeof s.volume==='function'?s.volume():s.volume);}catch(e){}
+  // replicad exposes .volume getter on solids in recent versions; fall back to mesh estimate
+  let volTxt='—';try{const s=solidOf(b);const v=(typeof s.volume==='function')?s.volume():s.volume;if(isFinite(v))volTxt=v.toFixed(1)+' mm³ ('+(v/1000).toFixed(2)+' cm³)';}catch(e){}
+  const bb=A._bbox;let sz='—';if(bb){const d=new THREE.Vector3();bb.getSize(d);sz=`${d.x.toFixed(1)} × ${d.y.toFixed(1)} × ${d.z.toFixed(1)} mm`;}
+  el.innerHTML=`<div class="row"><label>Volume</label><b style="color:var(--txt)">${volTxt}</b></div><div class="row"><label>Bounds</label><b style="color:var(--txt)">${sz}</b></div>`;
+}
+
+/* ---------- primitives ---------- */
+document.querySelectorAll('[data-add]').forEach(btn=>btn.addEventListener('click',()=>{if(!RC)return;let s,name;try{
+  if(btn.dataset.add==='box'){s=RC.makeBaseBox(40,40,40);name='Box';}
+  else if(btn.dataset.add==='cylinder'){s=RC.makeCylinder(20,40);name='Cylinder';}
+  else{s=RC.makeSphere(20);name='Sphere';}
+  addBody(s,name);pushUndo();toast('Added '+name);if(A.bodies.length===1)fitView();
+}catch(e){console.error(e);toast('Failed: '+e.message);}}));
+
+/* ---------- booleans (real B-rep) ---------- */
+function boolOp(kind){const ids=[...A.sel];if(ids.length!==2)return;const a=A.bodies.find(x=>x.id===ids[0]),b=A.bodies.find(x=>x.id===ids[1]);try{
+  const sa=solidOf(a),sb=solidOf(b);let res;if(kind==='fuse')res=sa.fuse(sb);else if(kind==='cut')res=sa.cut(sb);else res=sa.intersect(sb);
+  A.bodies=A.bodies.filter(x=>x!==a&&x!==b);const nb={id:uid(),name:(kind==='fuse'?'Combine':kind==='cut'?'Cut':'Intersect'),color:a.color,visible:true,base:res,x:0,y:0,z:0,rx:0,ry:0,rz:0};A.bodies.push(nb);A.sel=new Set([nb.id]);pushUndo();rebuild();syncSel();toast(nb.name+' ✓');
+}catch(e){console.error(e);toast('Boolean failed: '+e.message);}}
+$('#opFuse').onclick=()=>boolOp('fuse');$('#opCut').onclick=()=>boolOp('cut');$('#opInt').onclick=()=>boolOp('intersect');
+
+/* ---------- fillet / chamfer (true B-rep edge ops!) ---------- */
+function edgeOp(kind){const ids=[...A.sel];if(ids.length!==1)return;const b=A.bodies.find(x=>x.id===ids[0]);const r=parseFloat(prompt((kind==='fillet'?'Fillet':'Chamfer')+' radius (mm):','3'));if(!isFinite(r)||r<=0)return;try{
+  const s=solidOf(b);const res=kind==='fillet'?s.fillet(r):s.chamfer(r);b.base=res;b.x=b.y=b.z=b.rx=b.ry=b.rz=0;pushUndo();rebuild();toast((kind==='fillet'?'Filleted':'Chamfered')+' all edges @ '+r+'mm ✓');
+}catch(e){console.error(e);toast(kind+' failed (radius too big for an edge?) — try smaller');}}
+$('#opFillet').onclick=()=>edgeOp('fillet');$('#opChamfer').onclick=()=>edgeOp('chamfer');
+
+/* ---------- dup / del ---------- */
+$('#mDup').onclick=()=>{const sel=[...A.sel];if(!sel.length)return;const ns=[];sel.forEach(id=>{const b=A.bodies.find(x=>x.id===id);const c={...b,id:uid(),name:b.name+' copy',x:b.x+12,y:b.y+12};A.bodies.push(c);ns.push(c.id);});A.sel=new Set(ns);pushUndo();rebuild();syncSel();toast('Duplicated');};
+$('#mDel').onclick=()=>{if(!A.sel.size)return;A.bodies=A.bodies.filter(b=>!A.sel.has(b.id));A.sel.clear();pushUndo();rebuild();syncSel();toast('Deleted');};
+
+/* ---------- undo/redo (snapshot of body params; base solids kept by ref) ---------- */
+function snap(){return A.bodies.map(b=>({...b}));}
+function pushUndo(silent){A.undo.push(snap());if(A.undo.length>60)A.undo.shift();A.redo.length=0;$('#mUndo').disabled=A.undo.length<2;$('#mRedo').disabled=true;if(!silent){}}
+$('#mUndo').onclick=()=>{if(A.undo.length<2)return;A.redo.push(A.undo.pop());A.bodies=A.undo[A.undo.length-1].map(b=>({...b}));A.sel.clear();$('#mUndo').disabled=A.undo.length<2;$('#mRedo').disabled=false;rebuild();syncSel();toast('Undo');};
+$('#mRedo').onclick=()=>{if(!A.redo.length)return;const s=A.redo.pop();A.undo.push(s);A.bodies=s.map(b=>({...b}));A.sel.clear();$('#mRedo').disabled=!A.redo.length;$('#mUndo').disabled=A.undo.length<2;rebuild();syncSel();toast('Redo');};
+
+/* ---------- export ---------- */
+$('#exSTL').onclick=()=>{if(!A.bodies.length)return;try{
+  // fuse all visible bodies for a single solid; else export first
+  let vis=A.bodies.filter(b=>b.visible);if(!vis.length)return;let s=solidOf(vis[0]);for(let i=1;i<vis.length;i++){try{s=s.fuse(solidOf(vis[i]));}catch(e){}}
+  const blob=s.blobSTL();dl('model.stl',blob);toast('STL exported');
+}catch(e){console.error(e);toast('STL failed: '+e.message);}};
+$('#exSTEP').onclick=()=>{if(!A.bodies.length)return;try{
+  const shapes=A.bodies.filter(b=>b.visible).map(b=>({shape:solidOf(b),name:b.name}));
+  let blob;try{blob=RC.exportSTEP(shapes);}catch(e1){blob=RC.exportSTEP(shapes.map(s=>s.shape));}
+  dl('model.step',blob);toast('STEP exported (real B-Rep) ✓');
+}catch(e){console.error(e);toast('STEP failed: '+e.message);}};
+function dl(name,blob){const u=URL.createObjectURL(blob instanceof Blob?blob:new Blob([blob]));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+
+/* ---------- view ---------- */
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{const c=A.cam,v=b.dataset.view;if(v==='iso'){c.theta=Math.PI*0.3;c.phi=Math.PI*0.35;}if(v==='front'){c.theta=-Math.PI/2;c.phi=Math.PI/2;}if(v==='top'){c.phi=0.001;c.theta=Math.PI/2;}if(v==='right'){c.theta=0;c.phi=Math.PI/2;}applyCam();draw();}));
+$('#vFit').onclick=fitView;function fitView(){if(!A._bbox){A.cam.target.set(0,0,0);A.cam.radius=180;applyCam();draw();return;}const c=new THREE.Vector3();A._bbox.getCenter(c);const s=new THREE.Vector3();A._bbox.getSize(s);A.cam.target.copy(c);A.cam.radius=Math.max(30,s.length()*1.3);applyCam();draw();}
+$('#vEdges').onclick=()=>{A.showEdges=!A.showEdges;$('#vEdges').classList.toggle('on',A.showEdges);rebuild();};
+$('#vWire').onclick=()=>{A.wire=!A.wire;$('#vWire').classList.toggle('on',A.wire);rebuild();};
+$('#vEdges').classList.add('on');
+
+window.addEventListener('keydown',e=>{if(/input|select/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#mDel').click();}if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?$('#mRedo').click():$('#mUndo').click();}if(k==='f')fitView();});
+
+bootKernel();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open 3D CAD · Launcher</title>
+<style>
+  :root{--bg:#0f1319;--card:#171d26;--card2:#1e2631;--line:#2a333f;--txt:#e9eef5;--mut:#8996a6;--acc:#f0803c;--ok:#3ecf8e;--blue:#4c9ffe}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 50% -10%,#1b2430,#0f1319);color:var(--txt);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 20px}
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:28px;margin:0 0 4px;display:flex;align-items:center;gap:12px}
+  h1 .d{width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,var(--acc),var(--ok))}
+  .sub{color:var(--mut);margin:0 0 26px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:30px 0 12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  a.card{display:flex;gap:14px;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;transition:.14s;align-items:flex-start}
+  a.card:hover{background:var(--card2);border-color:#3d4a5a;transform:translateY(-2px)}
+  .ic{font-size:30px;flex-shrink:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#0e141c;border-radius:11px;border:1px solid var(--line)}
+  .card h3{margin:0 0 3px;font-size:16px;display:flex;align-items:center;gap:8px}
+  .card p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px}
+  .tag.best{background:#2c5a44;color:var(--ok)} .tag.brep{background:#123a5c;color:var(--blue)} .tag.off{background:#3a3320;color:#ffce54}
+  .note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:10px;padding:14px 16px;color:var(--mut);font-size:13px;margin-top:26px}
+  .note b{color:var(--txt)}
+  .foot{margin-top:24px;color:var(--mut);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="d"></span> Open 3D CAD — Launcher</h1>
+  <p class="sub">Ready-to-use open-source browser CAD, plus your offline MakerForge tools. Click a card to open it.</p>
+
+  <h2>Real B-Rep CAD (OpenCascade) — hosted, loads reliably</h2>
+  <div class="grid">
+    <a class="card" href="https://chili3d.com/" target="_blank" rel="noopener">
+      <div class="ic">🧩</div>
+      <div><h3>Chili3d <span class="tag best">Recommended</span></h3>
+      <p>Open-source, browser-based 3D CAD with a full GUI — sketches, extrude, fillet, STEP/STL export. OpenCascade (the FreeCAD kernel) compiled to WebAssembly. The closest thing to open-source Onshape/Fusion.</p></div>
+    </a>
+    <a class="card" href="https://studio.replicad.xyz/workbench" target="_blank" rel="noopener">
+      <div class="ic">📐</div>
+      <div><h3>Replicad Studio <span class="tag brep">B-Rep</span></h3>
+      <p>Code-driven CAD (write JS, see the model live) on the same OpenCascade kernel. Real fillets and STEP export. Great for parametric parts you define with code.</p></div>
+    </a>
+    <a class="card" href="https://zalo.github.io/CascadeStudio/" target="_blank" rel="noopener">
+      <div class="ic">⚙️</div>
+      <div><h3>CascadeStudio <span class="tag brep">B-Rep</span></h3>
+      <p>Live-scripted CAD kernel in the browser (JavaScript or OpenSCAD syntax). Export to STEP, STL, OBJ; share models by URL. Also OpenCascade-powered.</p></div>
+    </a>
+    <a class="card" href="https://github.com/xiangechen/chili3d" target="_blank" rel="noopener">
+      <div class="ic">⭐</div>
+      <div><h3>Chili3d source (GitHub)</h3>
+      <p>The code, if you want to run it locally, self-host, or build on it. MIT-friendly, actively maintained.</p></div>
+    </a>
+  </div>
+
+  <h2>Your MakerForge tools (built here — work offline)</h2>
+  <div class="grid">
+    <a class="card" href="./cad-studio.html">
+      <div class="ic">🔧</div>
+      <div><h3>MakerForge 3D CAD <span class="tag off">Offline</span></h3>
+      <p>Parametric feature-timeline modeler: extrude/revolve, booleans, parameters, section, measure, STL/OBJ. Mesh kernel (no true fillets/STEP) but fully tested and works with no internet.</p></div>
+    </a>
+    <a class="card" href="./blocks-3d-kids.html">
+      <div class="ic">🧊</div>
+      <div><h3>BlockBuddy (kids 3D) <span class="tag off">Offline</span></h3>
+      <p>Tinkercad-style: drag solid + hole shapes, group to merge, export STL. Big friendly UI for younger kids.</p></div>
+    </a>
+    <a class="card" href="./laser-studio.html">
+      <div class="ic">🔥</div>
+      <div><h3>Laser CAD Studio <span class="tag off">Offline</span></h3>
+      <p>Vector/CAD for laser cutting: shapes, align, layers, cut-time estimate, export SVG / LightBurn / G-code.</p></div>
+    </a>
+    <a class="card" href="./laser-studio-kids.html">
+      <div class="ic">🚀</div>
+      <div><h3>Zappy (kids laser) <span class="tag off">Offline</span></h3>
+      <p>Kid-friendly laser design with the same exporters.</p></div>
+    </a>
+  </div>
+
+  <div class="note">
+    <b>Why the hosted apps instead of my single-file OpenCascade build?</b><br>
+    A true B-Rep kernel is an ~11&nbsp;MB WebAssembly module. Loading it from a CDN inside a single local file is fragile — under <code>file://</code> the browser often blocks or stalls the wasm fetch (that's the "keeps loading" you hit). Chili3d, Replicad and CascadeStudio are <b>served over https with the wasm packaged correctly</b>, so they load reliably. Same kernel, none of the loading headaches.
+  </div>
+  <p class="foot">Tip: for the offline tools, if a link doesn't open, double-click the .html file in your folder instead.</p>
+</div>
+</body>
+</html>
