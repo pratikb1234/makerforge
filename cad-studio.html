@@ -169,6 +169,27 @@
         <h3>Appearance</h3>
         <div class="body" id="appear"><div class="hint">Select a body to change color / opacity.</div></div>
       </div>
+      <div class="sec" id="secInspect" style="display:none">
+        <h3>Inspect · Mass properties</h3>
+        <div class="body">
+          <div class="row"><label>Body</label><b id="inTarget">—</b></div>
+          <div class="row"><label>Volume</label><b id="inVol">—</b></div>
+          <div class="row"><label>Surface area</label><b id="inArea">—</b></div>
+          <div class="row"><label>Bounding box</label><b id="inBBox">—</b></div>
+          <div class="row"><label>Centroid</label><b id="inCentroid">—</b></div>
+          <div class="row"><label>Watertight</label><b id="inTight">—</b></div>
+          <div class="row"><label>Material</label>
+            <select id="inMat" aria-label="Material for mass estimate">
+              <option value="1.24">PLA · 1.24 g/cm³</option>
+              <option value="1.04">ABS · 1.04 g/cm³</option>
+              <option value="1.25">PETG · 1.25 g/cm³</option>
+              <option value="2.70">Aluminium · 2.70 g/cm³</option>
+              <option value="7.85">Steel · 7.85 g/cm³</option>
+            </select></div>
+          <div class="row"><label>Est. mass</label><b id="inMass">—</b></div>
+          <div class="hint" id="inNote"></div>
+        </div>
+      </div>
       <div class="sec" id="secSection" style="display:none">
         <h3>Section</h3>
         <div class="body">
@@ -347,6 +368,7 @@ function rebuild(){
   $('#stTris').textContent=Math.round(tris);
   if(any){const s=new THREE.Vector3();box.getSize(s);$('#stSize').textContent=`${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)}`;APP._bbox=box;}else{$('#stSize').textContent='—';APP._bbox=null;}
   renderTree();render();
+  if(APP.inspect)updateInspect();
 }
 
 /* ===================== THREE setup ===================== */
@@ -538,6 +560,79 @@ function stlAscii(tris){let s='solid makerforge\n';for(const t of tris){const n=
 function objText(tris){let s='# MakerForge OBJ\n',vi=1;tris.forEach(t=>{for(let i=0;i<3;i++)s+=`v ${t[i*3]} ${t[i*3+1]} ${t[i*3+2]}\n`;s+=`f ${vi} ${vi+1} ${vi+2}\n`;vi+=3;});return s;}
 function triNormal(t){const ax=t[3]-t[0],ay=t[4]-t[1],az=t[5]-t[2],bx=t[6]-t[0],by=t[7]-t[1],bz=t[8]-t[2];let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;const l=Math.hypot(nx,ny,nz)||1;return[nx/l,ny/l,nz/l];}
 function download(name,data,mime){const b=new Blob([data],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+
+/* ===================== Mass properties (Inspect) =====================
+   Pure mesh math over triangle soup [ [ax,ay,az,bx,by,bz,cx,cy,cz], … ]:
+   - volume: sum of signed tetrahedra against the origin (divergence theorem)
+   - centroid: volume-weighted tetra centroids
+   - watertight: weld vertices on a tolerance grid, then every edge must be
+     shared by exactly two triangles. Welding first is what makes UV-sphere
+     poles (duplicated seam/pole vertices) check correctly. Unit-tested. */
+function massProps(tris,weldTol){
+  const tol=weldTol==null?1e-3:weldTol;
+  let vol=0,area=0,cxs=0,cys=0,czs=0;
+  let minx=Infinity,miny=Infinity,minz=Infinity,maxx=-Infinity,maxy=-Infinity,maxz=-Infinity;
+  for(const t of tris){
+    const ax=t[0],ay=t[1],az=t[2],bx=t[3],by=t[4],bz=t[5],cx=t[6],cy=t[7],cz=t[8];
+    minx=Math.min(minx,ax,bx,cx);maxx=Math.max(maxx,ax,bx,cx);
+    miny=Math.min(miny,ay,by,cy);maxy=Math.max(maxy,ay,by,cy);
+    minz=Math.min(minz,az,bz,cz);maxz=Math.max(maxz,az,bz,cz);
+    const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az;
+    area+=Math.hypot(uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx)/2;
+    const v6=ax*(by*cz-bz*cy)-ay*(bx*cz-bz*cx)+az*(bx*cy-by*cx);
+    vol+=v6/6;
+    cxs+=(ax+bx+cx)/4*(v6/6);cys+=(ay+by+cy)/4*(v6/6);czs+=(az+bz+cz)/4*(v6/6);
+  }
+  const bbox=tris.length?{x:minx,y:miny,z:minz,w:maxx-minx,h:maxy-miny,d:maxz-minz}:null;
+  const centroid=Math.abs(vol)>1e-9?{x:cxs/vol,y:cys/vol,z:czs/vol}
+    :bbox?{x:minx+bbox.w/2,y:miny+bbox.h/2,z:minz+bbox.d/2}:{x:0,y:0,z:0};
+  // watertight check on welded vertices
+  const key=(x,y,z)=>Math.round(x/tol)+','+Math.round(y/tol)+','+Math.round(z/tol);
+  const edges=new Map();
+  for(const t of tris){
+    const k=[key(t[0],t[1],t[2]),key(t[3],t[4],t[5]),key(t[6],t[7],t[8])];
+    for(let i=0;i<3;i++){
+      const a=k[i],b=k[(i+1)%3];
+      if(a===b)continue; // degenerate edge after welding (pole sliver)
+      const e=a<b?a+'|'+b:b+'|'+a;
+      edges.set(e,(edges.get(e)||0)+1);
+    }
+  }
+  let open=0,nonManifold=0;
+  edges.forEach(c=>{if(c===1)open++;else if(c>2)nonManifold++;});
+  return{volume:Math.abs(vol),signedVolume:vol,area,centroid,bbox,
+    watertight:tris.length>0&&open===0&&nonManifold===0,openEdges:open,nonManifoldEdges:nonManifold};
+}
+
+/* ---- Inspect panel ---- */
+function inspectTarget(){
+  const live=[...APP.sel].filter(id=>!isConsumed(id));
+  const meshes=bodyGroup.children.filter(m=>live.length?live.includes(m.userData.fid):true);
+  const tris=[];
+  meshes.forEach(m=>{const p=m.geometry.attributes.position.array;for(let i=0;i<p.length;i+=9)tris.push([p[i],p[i+1],p[i+2],p[i+3],p[i+4],p[i+5],p[i+6],p[i+7],p[i+8]]);});
+  const label=live.length
+    ?live.map(id=>{const f=APP.features.find(x=>x.id===id);return f?f.name:'';}).join(', ')
+    :(meshes.length?'All visible bodies':'—');
+  return{tris,label};
+}
+function updateInspect(){
+  if(!APP.inspect)return;
+  const {tris,label}=inspectTarget();
+  const set=(id,v)=>{$('#'+id).textContent=v;};
+  if(!tris.length){['inVol','inArea','inBBox','inCentroid','inTight','inMass'].forEach(id=>set(id,'—'));set('inTarget','—');$('#inNote').textContent='Nothing to inspect — add or show a body.';return;}
+  const mp=massProps(tris);
+  const d=+$('#inMat').value;
+  set('inTarget',label);
+  set('inVol',`${mp.volume.toFixed(1)} mm³ · ${(mp.volume/1000).toFixed(2)} cm³`);
+  set('inArea',`${mp.area.toFixed(1)} mm²`);
+  set('inBBox',mp.bbox?`${mp.bbox.w.toFixed(1)} × ${mp.bbox.h.toFixed(1)} × ${mp.bbox.d.toFixed(1)} mm`:'—');
+  set('inCentroid',`(${mp.centroid.x.toFixed(1)}, ${mp.centroid.y.toFixed(1)}, ${mp.centroid.z.toFixed(1)})`);
+  set('inTight',mp.watertight?'✅ yes':`⚠️ no (${mp.openEdges} open, ${mp.nonManifoldEdges} non-manifold edges)`);
+  set('inMass',`${(mp.volume/1000*d).toFixed(1)} g`);
+  $('#inNote').textContent=mp.watertight?'':'Volume & mass are unreliable on a non-watertight mesh — expected on some boolean results (BSP limitation).';
+}
+$('#mInspect').onclick=()=>{APP.inspect=!APP.inspect;$('#mInspect').classList.toggle('on',APP.inspect);$('#secInspect').style.display=APP.inspect?'block':'none';updateInspect();};
+$('#inMat').addEventListener('change',updateInspect);
 
 /* save / open / new */
 $('#mSave').onclick=()=>{download('model.mkc',JSON.stringify({v:1,features:APP.features,params:APP.params},null,0),'application/json');toast('Saved');};
