@@ -651,9 +651,9 @@ function onSelectDown(sp,m,e){
   if(S.sel.size===1){
     const o=findObj([...S.sel][0]);
     if(o&&o.type!=='group'){
-      const rh=rotHandle(o);if(Math.hypot(sp.x-rh.x,sp.y-rh.y)<9){S.drag={mode:'rotate',o,cx:o.x+o.w/2,cy:o.y+o.h/2,start:o.rot||0,a0:Math.atan2(m.y-(o.y+o.h/2),m.x-(o.x+o.w/2))};beginHist();return;}
+      const rh=rotHandle(o);if(Math.hypot(sp.x-rh.x,sp.y-rh.y)<9){S.drag={mode:'rotate',o,cx:o.x+o.w/2,cy:o.y+o.h/2,start:o.rot||0,a0:Math.atan2(m.y-(o.y+o.h/2),m.x-(o.x+o.w/2))};return;}
       const hs=handlePts(o);
-      for(const [k,h] of Object.entries(hs)){if(Math.hypot(sp.x-h.x,sp.y-h.y)<9){S.drag={mode:'resize',handle:k,o,o0:{x:o.x,y:o.y,w:o.w,h:o.h}};beginHist();return;}}
+      for(const [k,h] of Object.entries(hs)){if(Math.hypot(sp.x-h.x,sp.y-h.y)<9){S.drag={mode:'resize',handle:k,o,rot:o.rot||0,o0:{x:o.x,y:o.y,w:o.w,h:o.h}};return;}}
     }
   }
   // pick object
@@ -661,7 +661,7 @@ function onSelectDown(sp,m,e){
   if(picked){
     if(e.shiftKey){S.sel.has(picked.id)?S.sel.delete(picked.id):S.sel.add(picked.id);}
     else if(!S.sel.has(picked.id)){S.sel=new Set([picked.id]);}
-    S.drag={mode:'move',sx:m.x,sy:m.y,orig:snapshotSel(),moved:false};beginHist();
+    S.drag={mode:'move',sx:m.x,sy:m.y,orig:snapshotSel(),moved:false};
     syncPanels();draw();
   } else {
     if(!e.shiftKey)S.sel.clear();
@@ -683,16 +683,34 @@ function onSelectMove(sp,m,e){
   }
   if(d.mode==='resize'){
     const o=d.o,o0=d.o0;const h=d.handle;
-    // work in local (unrotated) space around fixed opposite corner — simplified axis-aligned resize
-    let nx=o0.x,ny=o0.y,nw=o0.w,nh=o0.h;
-    const mx=S.snapGrid?snap(m.x):m.x,my=S.snapGrid?snap(m.y):m.y;
-    if(h.includes('e'))nw=Math.max(1,mx-o0.x);
-    if(h.includes('s'))nh=Math.max(1,my-o0.y);
-    if(h.includes('w')){nw=Math.max(1,o0.x+o0.w-mx);nx=mx;}
-    if(h.includes('n')){nh=Math.max(1,o0.y+o0.h-my);ny=my;}
-    if($('#lockRatio').checked&&o0.w&&o0.h){const r=o0.w/o0.h;if(h==='e'||h==='w'){nh=nw/r;}else if(h==='n'||h==='s'){nw=nh*r;}else{nh=nw/r;}}
-    o.x=nx;o.y=ny;o.w=nw;o.h=nh;d.moved=true;syncPanels();draw();return;
+    const r=resizeRotatedRect(o0,d.rot,h,m.x,m.y,{snap:S.snapGrid?snap:null,ratio:$('#lockRatio').checked});
+    o.x=r.x;o.y=r.y;o.w=r.w;o.h=r.h;d.moved=true;syncPanels();draw();return;
   }
+}
+/* Resize a (possibly rotated) box from one of its 8 handles, working in the
+   object's LOCAL (unrotated) frame and keeping the opposite handle fixed in
+   world space. o0 = box at drag start {x,y,w,h}, rotDeg = rotation, handle =
+   'nw'|'n'|…|'w', (mxW,myW) = mouse in world mm. opts.snap = grid-snap fn
+   applied in local space; opts.ratio = keep o0 aspect. Pure — unit-tested. */
+function resizeRotatedRect(o0,rotDeg,handle,mxW,myW,opts={}){
+  const a=rad(rotDeg||0);
+  const c0={x:o0.x+o0.w/2,y:o0.y+o0.h/2};
+  const ml=rotPt(mxW,myW,c0.x,c0.y,-a);            // mouse → local frame
+  const mx=opts.snap?opts.snap(ml.x):ml.x, my=opts.snap?opts.snap(ml.y):ml.y;
+  let nx=o0.x,ny=o0.y,nw=o0.w,nh=o0.h;
+  if(handle.includes('e'))nw=Math.max(1,mx-o0.x);
+  if(handle.includes('s'))nh=Math.max(1,my-o0.y);
+  if(handle.includes('w')){nw=Math.max(1,o0.x+o0.w-mx);nx=Math.min(mx,o0.x+o0.w-1);}
+  if(handle.includes('n')){nh=Math.max(1,o0.y+o0.h-my);ny=Math.min(my,o0.y+o0.h-1);}
+  if(opts.ratio&&o0.w&&o0.h){const r=o0.w/o0.h;if(handle==='e'||handle==='w'){nh=nw/r;}else if(handle==='n'||handle==='s'){nw=nh*r;}else{nh=nw/r;}}
+  // anchor = point of the box opposite the handle; keep it fixed in world space
+  const ax=handle.includes('e')?o0.x:handle.includes('w')?o0.x+o0.w:o0.x+o0.w/2;
+  const ay=handle.includes('s')?o0.y:handle.includes('n')?o0.y+o0.h:o0.y+o0.h/2;
+  const a2x=handle.includes('e')?nx:handle.includes('w')?nx+nw:nx+nw/2;
+  const a2y=handle.includes('s')?ny:handle.includes('n')?ny+nh:ny+nh/2;
+  const Aw=rotPt(ax,ay,c0.x,c0.y,a);
+  const A2w=rotPt(a2x,a2y,nx+nw/2,ny+nh/2,a);
+  return{x:nx+(Aw.x-A2w.x),y:ny+(Aw.y-A2w.y),w:nw,h:nh};
 }
 function moveObj(o,dx,dy){if(o.type==='group'){o.children.forEach(c=>moveObj(c,dx,dy));}o.x+=dx;o.y+=dy;}
 
@@ -707,21 +725,21 @@ function onPenDown(m,e){
   // click near first point closes
   const first=S.drawing.pts[0];const fx=S.drawing.x+first.x,fy=S.drawing.y+first.y;
   if(Math.hypot(x-fx,y-fy)<S.grid*.9&&S.drawing.pts.length>2){S.drawing.closed=true;finishPen();return;}
-  S.drawing.pts.push({x:x-S.drawing.x,y:y-S.drawing.y});normalizeLine(S.drawing);draw();
+  S.drawing.pts.push({x:x-S.drawing.x,y:y-S.drawing.y});normalizeLine(S.drawing);pushHist();draw();
 }
-function finishPen(){if(S.drawing&&S.drawing.type==='pen'){normalizeLine(S.drawing);if(S.drawing.pts.length<2){S.objects=S.objects.filter(o=>o!==S.drawing);}S.drawing=null;setTool('select');syncPanels();draw();}}
+function finishPen(){if(S.drawing&&S.drawing.type==='pen'){normalizeLine(S.drawing);if(S.drawing.pts.length<2){S.objects=S.objects.filter(o=>o!==S.drawing);}S.drawing=null;setTool('select');pushHist();syncPanels();draw();}}
 canvas.addEventListener('dblclick',()=>{if(S.tool==='pen')finishPen();});
 
 /* ---- Node editing ---- */
 function onNodeDown(sp,m,e){
   const objs=[...S.sel].map(id=>findObj(id)).filter(o=>o&&(o.type==='line'||o.type==='pen'));
   const tol=8/S.zoom;
-  for(const o of objs){for(let i=0;i<o.pts.length;i++){const w=rotAround(o,o.pts[i]);if(Math.hypot(m.x-w.x,m.y-w.y)<tol){S.nodeSel={oid:o.id,i};S.drag={mode:'node',o,i};beginHist();draw();return;}}}
+  for(const o of objs){for(let i=0;i<o.pts.length;i++){const w=rotAround(o,o.pts[i]);if(Math.hypot(m.x-w.x,m.y-w.y)<tol){S.nodeSel={oid:o.id,i};S.drag={mode:'node',o,i};draw();return;}}}
   // else fall back to select behaviour
   onSelectDown(sp,m,e);
 }
 canvas.addEventListener('pointermove',e=>{
-  if(S.drag&&S.drag.mode==='node'){const sp=evPos(e);const m=toModel(sp.x,sp.y);const o=S.drag.o;const cx=o.x+o.w/2,cy=o.y+o.h/2;const inv=rotPt(m.x,m.y,cx,cy,-rad(o.rot||0));o.pts[S.drag.i]={x:snap(inv.x)-o.x,y:snap(inv.y)-o.y};normalizeLine(o);draw();}
+  if(S.drag&&S.drag.mode==='node'){const sp=evPos(e);const m=toModel(sp.x,sp.y);const o=S.drag.o;const cx=o.x+o.w/2,cy=o.y+o.h/2;const inv=rotPt(m.x,m.y,cx,cy,-rad(o.rot||0));o.pts[S.drag.i]={x:snap(inv.x)-o.x,y:snap(inv.y)-o.y};S.drag.moved=true;normalizeLine(o);draw();}
 });
 
 /* ---- wheel zoom ---- */
@@ -736,23 +754,17 @@ canvas.addEventListener('wheel',e=>{
 /* =========================================================================
    History
    ========================================================================= */
+/* History is a timeline of COMMITTED states: history[hist] always equals the
+   current document. pushHist() defers the snapshot to a macrotask, so no matter
+   whether a caller invokes it before or after mutating, the committed snapshot
+   is the post-mutation state. Undo/redo just walk the timeline. */
 function serialize(){return JSON.stringify({objects:S.objects,layers:S.layers,bed:S.bed,activeLayer:S.activeLayer});}
-function beginHist(){S._pre=serialize();}
-function pushHistReplace(){if(S._pre){commitHist(S._pre);S._pre=null;}}
-function pushHist(){commitHist(serialize());}
+function pushHist(){if(S._histQ)return;S._histQ=true;setTimeout(()=>{S._histQ=false;const snap=serialize();if(snap!==S.history[S.hist])commitHist(snap);},0);}
+const pushHistReplace=pushHist; // legacy alias (was: commit pre-drag state)
 function commitHist(snap){S.history=S.history.slice(0,S.hist+1);S.history.push(snap);if(S.history.length>120)S.history.shift();S.hist=S.history.length-1;}
 function restore(snap){const d=JSON.parse(snap);S.objects=d.objects;S.layers=d.layers;S.bed=d.bed;S.activeLayer=d.activeLayer;S.sel.clear();renderLayers();syncPanels();draw();}
-function undo(){if(S.hist>0){if(S.hist===S.history.length-1){/*ensure current saved*/}S.hist--;restore(S.history[S.hist]);toast('Undo');}}
+function undo(){if(S.hist>0){S.hist--;restore(S.history[S.hist]);toast('Undo');}}
 function redo(){if(S.hist<S.history.length-1){S.hist++;restore(S.history[S.hist]);toast('Redo');}}
-
-/* record a baseline */
-function ensureBaseline(){if(S.history.length===0){commitHist(serialize());}}
-
-/* Wrap mutating ops to snapshot before */
-function withHist(fn){pushHist();fn();pushHist();}
-
-/* Actually we want: before-state pushed, do op, then push after. Simplify: */
-S.history=[];S.hist=-1;
 
 /* =========================================================================
    Panels / UI sync
@@ -850,6 +862,8 @@ $('#btnGroup').onclick=()=>{const objs=[...S.sel].map(id=>topLevelOf(id)).filter
 $('#btnUngroup').onclick=()=>{const sel=[...S.sel].map(id=>findObj(id)).filter(o=>o&&o.type==='group');if(!sel.length)return;pushHist();sel.forEach(g=>{const idx=S.objects.indexOf(g);S.objects.splice(idx,1,...g.children);g.children.forEach(c=>S.sel.add(c.id));S.sel.delete(g.id);});syncPanels();draw();};
 $('#btnFront').onclick=()=>reorder(1);$('#btnBack').onclick=()=>reorder(-1);
 function reorder(dir){const sel=[...S.sel].map(id=>topLevelOf(id)).filter(Boolean);if(!sel.length)return;pushHist();sel.forEach(o=>{S.objects=S.objects.filter(x=>x!==o);});if(dir>0)S.objects.push(...sel);else S.objects.unshift(...sel);draw();}
+$('#btnUndo').onclick=undo;
+$('#btnRedo').onclick=redo;
 $('#btnDup').onclick=duplicate;
 function duplicate(){const sel=[...S.sel].map(id=>findObj(id)).filter(Boolean);if(!sel.length)return;pushHist();const ns=[];sel.forEach(o=>{const c=cloneObj(o);moveObj(c,S.grid*2,S.grid*2);S.objects.push(c);ns.push(c.id);});S.sel=new Set(ns);renderLayers();syncPanels();draw();}
 function cloneObj(o){const c=JSON.parse(JSON.stringify(o));reid(c);return c;}
@@ -1146,7 +1160,7 @@ function updateZoomLabel(){const z=Math.round(S.zoom/2.2*100);$('#zLabel').textC
 $('#zIn').onclick=()=>{zoomAt(1.2);};$('#zOut').onclick=()=>{zoomAt(1/1.2);};
 function zoomAt(f){const cx=canvas.clientWidth/2,cy=canvas.clientHeight/2;const b=toModel(cx,cy);S.zoom=Math.max(.3,Math.min(40,S.zoom*f));const a=toModel(cx,cy);S.pan.x+=(a.x-b.x)*S.zoom;S.pan.y+=(a.y-b.y)*S.zoom;updateZoomLabel();draw();}
 $('#zFit').onclick=fit;$('#zLabel').onclick=fit;
-function fit(){const W=canvas.clientWidth,H=canvas.clientHeight;const pad=40;const zx=(W-pad*2)/S.bed.w,zy=(H-pad*2)/S.bed.h;S.zoom=Math.min(zx,zy);S.pan.x=(W-S.bed.w*S.zoom)/2;S.pan.y=(H-S.bed.h*S.zoom)/2;updateZoomLabel();draw();}
+function fit(){const W=canvas.clientWidth,H=canvas.clientHeight;if(W<80||H<80){requestAnimationFrame(fit);return;}const pad=40;const zx=(W-pad*2)/S.bed.w,zy=(H-pad*2)/S.bed.h;S.zoom=Math.max(0.05,Math.min(zx,zy));S.pan.x=(W-S.bed.w*S.zoom)/2;S.pan.y=(H-S.bed.h*S.zoom)/2;updateZoomLabel();draw();}
 
 /* =========================================================================
    Keyboard

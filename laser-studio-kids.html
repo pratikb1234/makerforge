@@ -349,32 +349,56 @@ canvas.addEventListener('pointerup',e=>{const sp=evPos(e),m=toModel(sp.x,sp.y);
 });
 function onSelectDown(sp,m,e){const tol=8/S.zoom;
   if(S.sel.size===1){const o=findObj([...S.sel][0]);if(o&&o.type!=='group'){
-    const rh=rotHandle(o);if(Math.hypot(sp.x-rh.x,sp.y-rh.y)<14){beginHist();S.drag={mode:'rotate',o,cx:o.x+o.w/2,cy:o.y+o.h/2,start:o.rot||0,a0:Math.atan2(m.y-(o.y+o.h/2),m.x-(o.x+o.w/2))};return;}
-    const hs=handlePts(o);for(const[k,h]of Object.entries(hs)){if(Math.hypot(sp.x-h.x,sp.y-h.y)<14){beginHist();S.drag={mode:'resize',handle:k,o,o0:{x:o.x,y:o.y,w:o.w,h:o.h}};return;}}
+    const rh=rotHandle(o);if(Math.hypot(sp.x-rh.x,sp.y-rh.y)<14){S.drag={mode:'rotate',o,cx:o.x+o.w/2,cy:o.y+o.h/2,start:o.rot||0,a0:Math.atan2(m.y-(o.y+o.h/2),m.x-(o.x+o.w/2))};return;}
+    const hs=handlePts(o);for(const[k,h]of Object.entries(hs)){if(Math.hypot(sp.x-h.x,sp.y-h.y)<14){S.drag={mode:'resize',handle:k,o,rot:o.rot||0,o0:{x:o.x,y:o.y,w:o.w,h:o.h}};return;}}
   }}
   let picked=null;for(let i=S.objects.length-1;i>=0;i--)if(hitObject(S.objects[i],m.x,m.y,tol)){picked=S.objects[i];break;}
-  if(picked){if(e.shiftKey){S.sel.has(picked.id)?S.sel.delete(picked.id):S.sel.add(picked.id);}else if(!S.sel.has(picked.id))S.sel=new Set([picked.id]);beginHist();S.drag={mode:'move',sx:m.x,sy:m.y,orig:snapSel(),moved:false};sync();draw();}
+  if(picked){if(e.shiftKey){S.sel.has(picked.id)?S.sel.delete(picked.id):S.sel.add(picked.id);}else if(!S.sel.has(picked.id))S.sel=new Set([picked.id]);S.drag={mode:'move',sx:m.x,sy:m.y,orig:snapSel(),moved:false};sync();draw();}
   else{if(!e.shiftKey)S.sel.clear();S.marquee={x0:sp.x,y0:sp.y,x1:sp.x,y1:sp.y};sync();draw();}
 }
 function snapSel(){const map={};S.sel.forEach(id=>{const o=findObj(id);if(o)map[id]={x:o.x,y:o.y};});return map;}
 function onSelectMove(sp,m,e){const d=S.drag;
   if(d.mode==='move'){const dx=m.x-d.sx,dy=m.y-d.sy;S.sel.forEach(id=>{const o=findObj(id);if(!o)return;const o0=d.orig[id];if(!o0)return;let nx=o0.x+dx,ny=o0.y+dy;if(S.snapGrid){nx=snap(nx);ny=snap(ny);}moveObj(o,nx-o.x,ny-o.y);});d.moved=true;sync();draw();return;}
   if(d.mode==='rotate'){const a1=Math.atan2(m.y-d.cy,m.x-d.cx);let deg=d.start+(a1-d.a0)*180/Math.PI;if(e.shiftKey)deg=Math.round(deg/15)*15;d.o.rot=deg;d.moved=true;sync();draw();return;}
-  if(d.mode==='resize'){const o=d.o,o0=d.o0,h=d.handle;let nx=o0.x,ny=o0.y,nw=o0.w,nh=o0.h;const mx=snap(m.x),my=snap(m.y);if(h.includes('e'))nw=Math.max(4,mx-o0.x);if(h.includes('s'))nh=Math.max(4,my-o0.y);if(h.includes('w')){nw=Math.max(4,o0.x+o0.w-mx);nx=mx;}if(h.includes('n')){nh=Math.max(4,o0.y+o0.h-my);ny=my;}o.x=nx;o.y=ny;o.w=nw;o.h=nh;d.moved=true;sync();draw();return;}
+  if(d.mode==='resize'){const o=d.o,o0=d.o0,h=d.handle;const r=resizeRotatedRect(o0,d.rot,h,m.x,m.y,{snap,min:4});o.x=r.x;o.y=r.y;o.w=r.w;o.h=r.h;d.moved=true;sync();draw();return;}
+}
+/* Resize a (possibly rotated) box from a corner handle in the object's LOCAL
+   (unrotated) frame, keeping the opposite corner fixed in world space.
+   Same math as the pro edition — pure, unit-tested. */
+function resizeRotatedRect(o0,rotDeg,handle,mxW,myW,opts={}){
+  const a=rad(rotDeg||0),min=opts.min||1;
+  const c0={x:o0.x+o0.w/2,y:o0.y+o0.h/2};
+  const ml=rotPt(mxW,myW,c0.x,c0.y,-a);
+  const mx=opts.snap?opts.snap(ml.x):ml.x, my=opts.snap?opts.snap(ml.y):ml.y;
+  let nx=o0.x,ny=o0.y,nw=o0.w,nh=o0.h;
+  if(handle.includes('e'))nw=Math.max(min,mx-o0.x);
+  if(handle.includes('s'))nh=Math.max(min,my-o0.y);
+  if(handle.includes('w')){nw=Math.max(min,o0.x+o0.w-mx);nx=Math.min(mx,o0.x+o0.w-min);}
+  if(handle.includes('n')){nh=Math.max(min,o0.y+o0.h-my);ny=Math.min(my,o0.y+o0.h-min);}
+  if(opts.ratio&&o0.w&&o0.h){const r=o0.w/o0.h;if(handle==='e'||handle==='w'){nh=nw/r;}else if(handle==='n'||handle==='s'){nw=nh*r;}else{nh=nw/r;}}
+  const ax=handle.includes('e')?o0.x:handle.includes('w')?o0.x+o0.w:o0.x+o0.w/2;
+  const ay=handle.includes('s')?o0.y:handle.includes('n')?o0.y+o0.h:o0.y+o0.h/2;
+  const a2x=handle.includes('e')?nx:handle.includes('w')?nx+nw:nx+nw/2;
+  const a2y=handle.includes('s')?ny:handle.includes('n')?ny+nh:ny+nh/2;
+  const Aw=rotPt(ax,ay,c0.x,c0.y,a);
+  const A2w=rotPt(a2x,a2y,nx+nw/2,ny+nh/2,a);
+  return{x:nx+(Aw.x-A2w.x),y:ny+(Aw.y-A2w.y),w:nw,h:nh};
 }
 function moveObj(o,dx,dy){if(o.type==='group')o.children.forEach(c=>moveObj(c,dx,dy));o.x+=dx;o.y+=dy;}
 function normalizeLine(o){let mnx=1e9,mny=1e9;o.pts.forEach(p=>{mnx=Math.min(mnx,o.x+p.x);mny=Math.min(mny,o.y+p.y);});const dx=mnx-o.x,dy=mny-o.y;o.x=mnx;o.y=mny;o.pts=o.pts.map(p=>({x:p.x-dx,y:p.y-dy}));let mxx=0,mxy=0;o.pts.forEach(p=>{mxx=Math.max(mxx,p.x);mxy=Math.max(mxy,p.y);});o.w=Math.max(1,mxx);o.h=Math.max(1,mxy);}
-function onPenDown(m){const x=snap(m.x),y=snap(m.y);if(!S.drawing||S.drawing.type!=='pen'){S.drawing=makeShape('pen',x,y,1,1);S.drawing.pts=[{x:0,y:0}];S.objects.push(S.drawing);S.sel=new Set([S.drawing.id]);pushHist();return;}const first=S.drawing.pts[0];if(Math.hypot(x-(S.drawing.x+first.x),y-(S.drawing.y+first.y))<S.grid&&S.drawing.pts.length>2){S.drawing.closed=true;finishPen();return;}S.drawing.pts.push({x:x-S.drawing.x,y:y-S.drawing.y});normalizeLine(S.drawing);draw();}
-function finishPen(){if(S.drawing&&S.drawing.type==='pen'){normalizeLine(S.drawing);if(S.drawing.pts.length<2)S.objects=S.objects.filter(o=>o!==S.drawing);else cheer();S.drawing=null;setTool('select');sync();draw();}}
+function onPenDown(m){const x=snap(m.x),y=snap(m.y);if(!S.drawing||S.drawing.type!=='pen'){S.drawing=makeShape('pen',x,y,1,1);S.drawing.pts=[{x:0,y:0}];S.objects.push(S.drawing);S.sel=new Set([S.drawing.id]);pushHist();return;}const first=S.drawing.pts[0];if(Math.hypot(x-(S.drawing.x+first.x),y-(S.drawing.y+first.y))<S.grid&&S.drawing.pts.length>2){S.drawing.closed=true;finishPen();return;}S.drawing.pts.push({x:x-S.drawing.x,y:y-S.drawing.y});normalizeLine(S.drawing);pushHist();draw();}
+function finishPen(){if(S.drawing&&S.drawing.type==='pen'){normalizeLine(S.drawing);if(S.drawing.pts.length<2)S.objects=S.objects.filter(o=>o!==S.drawing);else cheer();S.drawing=null;setTool('select');pushHist();sync();draw();}}
 canvas.addEventListener('dblclick',()=>{if(S.tool==='pen')finishPen();});
 canvas.addEventListener('wheel',e=>{e.preventDefault();const sp=evPos(e),b=toModel(sp.x,sp.y);const f=e.deltaY<0?1.12:1/1.12;S.zoom=Math.max(0.5,Math.min(30,S.zoom*f));const a=toModel(sp.x,sp.y);S.pan.x+=(a.x-b.x)*S.zoom;S.pan.y+=(a.y-b.y)*S.zoom;draw();},{passive:false});
 
 /* ---------- history ---------- */
 function serialize(){return JSON.stringify({objects:S.objects,layers:S.layers,bed:S.bed,activeLayer:S.activeLayer});}
 function commit(sn){S.history=S.history.slice(0,S.hist+1);S.history.push(sn);if(S.history.length>120)S.history.shift();S.hist=S.history.length-1;}
-function beginHist(){S._pre=serialize();}
-function pushHistReplace(){if(S._pre){commit(S._pre);S._pre=null;commit(serialize());}}
-function pushHist(){commit(serialize());}
+/* History = timeline of committed states; history[hist] === current document.
+   pushHist() defers the snapshot to a macrotask so it always captures the
+   POST-mutation state, no matter where in the handler it was called. */
+function pushHist(){if(S._histQ)return;S._histQ=true;setTimeout(()=>{S._histQ=false;const sn=serialize();if(sn!==S.history[S.hist])commit(sn);},0);}
+const pushHistReplace=pushHist; // legacy alias
 function restore(sn){const d=JSON.parse(sn);S.objects=d.objects;S.layers=d.layers;S.bed=d.bed;S.activeLayer=d.activeLayer;S.sel.clear();sync();draw();}
 function undo(){if(S.hist>0){S.hist--;restore(S.history[S.hist]);toast('↩️ Oops fixed!');}else toast('Nothing to undo');}
 function redo(){if(S.hist<S.history.length-1){S.hist++;restore(S.history[S.hist]);toast('↪️ Redo!');}}
@@ -399,7 +423,7 @@ $('#bNew').onclick=()=>{if(S.objects.length&&!confirm('Start a brand new page? �
 /* ---------- zoom ---------- */
 $('#zIn').onclick=()=>zoomAt(1.25);$('#zOut').onclick=()=>zoomAt(1/1.25);$('#zFit').onclick=fit;
 function zoomAt(f){const cx=canvas.clientWidth/2,cy=canvas.clientHeight/2,b=toModel(cx,cy);S.zoom=Math.max(.5,Math.min(30,S.zoom*f));const a=toModel(cx,cy);S.pan.x+=(a.x-b.x)*S.zoom;S.pan.y+=(a.y-b.y)*S.zoom;draw();}
-function fit(){const W=canvas.clientWidth,H=canvas.clientHeight,pad=50;S.zoom=Math.min((W-pad*2)/S.bed.w,(H-pad*2)/S.bed.h);S.pan.x=(W-S.bed.w*S.zoom)/2;S.pan.y=(H-S.bed.h*S.zoom)/2;draw();}
+function fit(){const W=canvas.clientWidth,H=canvas.clientHeight;if(W<100||H<100){requestAnimationFrame(fit);return;}const pad=50;S.zoom=Math.max(0.05,Math.min((W-pad*2)/S.bed.w,(H-pad*2)/S.bed.h));S.pan.x=(W-S.bed.w*S.zoom)/2;S.pan.y=(H-S.bed.h*S.zoom)/2;draw();}
 
 /* ---------- estimate ---------- */
 function polyLen(poly){let L=0;for(let i=0;i<poly.length-1;i++)L+=Math.hypot(poly[i+1].x-poly[i].x,poly[i+1].y-poly[i].y);return L;}
