@@ -135,7 +135,7 @@
    via Replicad, loaded from CDN. True B-rep: real fillets/chamfers + STEP.
    Kernel: replicad 0.23.1 + replicad-opencascadejs 0.23.0 (verified APIs).
    ===================================================================== */
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import * as THREE from "./vendor/three.module.js";
 
 const $=s=>document.querySelector(s);
 const toast=(()=>{let t;return m=>{const e=$('#toast');e.textContent=m;e.classList.add('show');clearTimeout(t);t=setTimeout(()=>e.classList.remove('show'),1900);};})();
@@ -146,27 +146,54 @@ const uid=()=>A._id++;
 const PAL=['#f0803c','#4c9ffe','#3ecf8e','#c07bff','#ffce54','#ff8fce'];
 let RC=null; // replicad module
 
-/* ================= load OpenCascade kernel ================= */
+/* ================= load OpenCascade kernel =================
+   Local-first: the kernel (.js loader + 10.8 MB .wasm) and replicad are
+   self-hosted in ./vendor/ so the tool works without a CDN — it still
+   needs to be served over http(s); WASM bootstrap is unreliable on file://.
+   If the local files are missing we fall back to the CDNs. Every step has
+   a hard timeout so the UI shows the error screen instead of hanging. */
 const OCJS_VER="0.23.0", RC_VER="0.23.1";
-const WASM_URL=`https://cdn.jsdelivr.net/npm/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.wasm`;
+const LOCAL={rc:"./vendor/replicad.js", loader:"./vendor/replicad_single.js", wasm:"./vendor/replicad_single.wasm"};
+const CDN={rc:`https://esm.sh/replicad@${RC_VER}`, loader:`https://esm.sh/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.js`, wasm:`https://cdn.jsdelivr.net/npm/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.wasm`};
+function withTimeout(promise,ms,what){
+  return Promise.race([promise,new Promise((_,rej)=>setTimeout(()=>rej(new Error(`Timed out after ${ms/1000}s: ${what}`)),ms))]);
+}
+async function fetchWasm(url,onPct){ // fetch with progress so the pill shows real bytes
+  const res=await fetch(url);
+  if(!res.ok)throw new Error(`HTTP ${res.status} fetching ${url}`);
+  const total=+res.headers.get('Content-Length')||0;
+  if(!res.body||!total){return new Uint8Array(await res.arrayBuffer());}
+  const reader=res.body.getReader(),chunks=[];let got=0;
+  for(;;){const {done,value}=await reader.read();if(done)break;chunks.push(value);got+=value.length;onPct(Math.round(100*got/total));}
+  const out=new Uint8Array(got);let off=0;for(const c of chunks){out.set(c,off);off+=c.length;}
+  return out;
+}
+async function bootFrom(src,label){
+  setKernel('load',`Loading OpenCascade (${label})…`);
+  const [rc,ocFactoryMod]=await withTimeout(Promise.all([import(src.rc),import(src.loader)]),30000,`import kernel modules (${label})`);
+  const ocFactory=ocFactoryMod.default||ocFactoryMod;
+  const wasmBinary=await withTimeout(
+    fetchWasm(src.wasm,p=>setKernel('load',`Downloading kernel… ${p}%`)),
+    120000,`download replicad_single.wasm (${label})`);
+  setKernel('load','Compiling the kernel…');
+  $('#ovP').textContent='Compiling the kernel… almost there.';
+  const OC=await withTimeout(ocFactory({wasmBinary,locateFile:f=>f.endsWith('.wasm')?src.wasm:f}),60000,'instantiate WASM kernel');
+  rc.setOC(OC);
+  return rc;
+}
 async function bootKernel(){
-  try{
-    setKernel('load','Loading OpenCascade…');
-    // Replicad ESM + the OCCT wasm loader (converted to ESM by esm.sh)
-    const [rc, ocFactoryMod] = await Promise.all([
-      import(`https://esm.sh/replicad@${RC_VER}`),
-      import(`https://esm.sh/replicad-opencascadejs@${OCJS_VER}/src/replicad_single.js`)
-    ]);
-    RC=rc;
-    const ocFactory = ocFactoryMod.default || ocFactoryMod;
-    $('#ovP').textContent='Compiling the kernel… almost there.';
-    const OC = await ocFactory({ locateFile: (f)=> f.endsWith('.wasm') ? WASM_URL : f });
-    rc.setOC(OC);
-    onKernelReady();
-  }catch(err){
-    console.error(err);
-    kernelError(err);
+  if(location.protocol==='file:'){
+    kernelError(new Error('This page is running from file:// — the WASM kernel cannot load. Serve the folder over http (e.g. `npx serve .` or `python3 -m http.server`) and open http://localhost instead.'));
+    return;
   }
+  try{
+    RC=await bootFrom(LOCAL,'local');
+  }catch(errLocal){
+    console.warn('Local kernel failed, trying CDN…',errLocal);
+    try{ RC=await bootFrom(CDN,'CDN'); }
+    catch(errCdn){ console.error(errCdn); kernelError(errCdn); return; }
+  }
+  onKernelReady();
 }
 function setKernel(cls,txt){const k=$('#kernel');k.className='kernel '+cls;$('#kernelTxt').textContent=txt;}
 function onKernelReady(){
@@ -188,7 +215,7 @@ function onKernelReady(){
 function kernelError(err){
   setKernel('err','Kernel failed');$('#stK').textContent='failed';
   $('#overlay').innerHTML=`<h2 style="color:var(--danger)">⚠️ Couldn't load the CAD kernel</h2>
-  <p>The OpenCascade WebAssembly kernel didn't load. This needs an internet connection and a browser that allows loading modules from a CDN. Error:<br><code style="color:#ff9">${(err&&err.message||err)}</code></p>
+  <p>The OpenCascade WebAssembly kernel didn't load. Make sure this page is served over <b>http(s)</b> (not opened as a file) — e.g. run <code>python3 -m http.server</code> in this folder. It first tries the bundled kernel in <code>./vendor/</code>, then falls back to the CDN (which needs internet). Error:<br><code style="color:#ff9">${(err&&err.message||err)}</code></p>
   <p>You can still use the mesh-based tools that work offline: <b>cad-studio.html</b> and <b>blocks-3d-kids.html</b>. Or try the ready-made open-source app <a class="lnk" href="https://chili3d.com" target="_blank">Chili3d</a> in your browser.</p>
   <p><span class="lnk" onclick="location.reload()">↻ Try again</span></p>`;
 }
