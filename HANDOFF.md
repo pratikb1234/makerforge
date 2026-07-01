@@ -1,8 +1,28 @@
 # MakerForge — Maker Tools Suite · Engineering Handoff
 
 **Owner:** Pratik (pratik@bitsandstudios.com)
-**Prepared:** 2 July 2026
+**Prepared:** 2 July 2026 · **Executed:** 2 July 2026 (see status update below)
 **Purpose:** Hand off a suite of browser-based maker tools (2D laser CAD + 3D CAD, adult + kids editions) to the next contributor with a clear ask: **improve, test, and do a proper UI/UX pass.**
+
+---
+
+## ✅ STATUS UPDATE — 2 July 2026 (post-handoff execution)
+
+The kickoff below was executed end-to-end. Summary of what changed:
+
+| Item | Status |
+|---|---|
+| §3 test matrix (4 offline tools, real browser over http) | ✅ Run — every core flow click-tested via scripted pointer events + screenshots; results inline in §3/§4 |
+| §4.1 OpenCascade hang | ✅ **Fixed** — kernel + replicad + Three.js self-hosted in `vendor/`, local-first boot w/ CDN fallback, hard timeouts, byte-progress. Root cause: `file://` (WASM bootstrap) + `Module.ready` never rejecting. Works over http; fillets + STEP export verified live |
+| §4.2 undo/redo | ✅ **Fixed** in both laser tools + blocks (normalized to committed-states timeline); **cad-studio had NO undo at all — full undo/redo added** (buttons + Ctrl+Z/Y). Laser Undo/Redo toolbar buttons were never wired — wired |
+| §4.3 rotated resize | ✅ **Fixed** — new `resizeRotatedRect()` works in the local frame, opposite handle stays world-fixed (188-assert unit test) |
+| §4.4 text not cut-ready | ✅ **Fixed** — embedded public-domain Hershey `futural` stroke font; text renders/estimates/exports as real polylines (SVG paths, LightBurn Path shapes, G-code moves) in both laser tools |
+| Mass Properties (§6.2) | ✅ **Live** — 🔍 Inspect panel in cad-studio: volume/area/bbox/centroid/watertight (+open/non-manifold counts)/mass by material. Vertex-weld before watertight check fixes the UV-pole false negative |
+| UI/UX + WCAG 2.1 AA (§5) | ✅ Shared `tokens.css` (dark + kids themes), AA text contrast, focus rings, ARIA labels/roles, ≥44px kid tap targets, `prefers-reduced-motion`, responsive breakpoints, SVG icon sprite (pro laser), first-run onboarding tours. Audit: `ACCESSIBILITY.md` |
+| New bugs found & fixed during the matrix | 3D canvas rendered at 2× CSS size on Retina (`inset:0` doesn't stretch a replaced element) — blocks-3d's shape tray was completely unusable; laser tools could boot at negative zoom (fit-before-layout race) |
+| Tests | `tests/` — 260 Node asserts that **extract the shipped functions from the HTML files** (rotated resize ×188, history ×24, mass props ×18, text vectorization ×30). Run: `node tests/<name>.test.js` |
+
+**Not done / still open:** P1 backlog (edge-select fillet, sketch-on-face, on-canvas gizmo, DXF, kerf offset), P2 (Manifold WASM, Web Worker CSG §4.5, shared-module refactor §4.6), Figma mockups (§5.5.2 — tokens + implemented HTML serve as the living spec). Text export uses single-stroke glyphs (ideal for engrave/score; for thick outline cuts, a future opentype.js path remains §6 P1-9).
 
 ---
 
@@ -40,7 +60,7 @@ Do not rewrite from scratch. The geometry/engine code is unit-tested and correct
 | `laser-studio-kids.html` | Kid edition of the laser studio ("Zappy") | Custom 2D | ✅ Yes | Same engine; UI not click-tested |
 | `cad-studio.html` | Parametric 3D CAD, feature timeline (Fusion/Onshape-style MVP) | Custom mesh CSG (BSP) | ✅ Yes | CSG + STL unit-tested; UI not click-tested |
 | `blocks-3d-kids.html` | Tinkercad-style 3D for young kids ("BlockBuddy") | Custom mesh CSG (BSP) | ✅ Yes | Shares tested CSG; UI not click-tested |
-| `cad-brep-opencascade.html` | Real B-Rep CAD (true fillets + STEP) | **OpenCascade** via Replicad (WASM, CDN) | ❌ Needs internet | **NOT run-tested** — see §4.1 |
+| `cad-brep-opencascade.html` | Real B-Rep CAD (true fillets + STEP) | **OpenCascade** via Replicad (WASM, self-hosted in `vendor/`) | ✅ Yes (needs http server) | ✅ Run-tested: fillet r=3 + STEP export verified |
 | `open-cad-launcher.html` | Launcher linking hosted open-source CAD (Chili3d etc.) + local tools | none | ✅ (links need internet) | Static, trivial |
 | `HANDOFF.md` | This document | — | — | — |
 
@@ -110,7 +130,7 @@ Drag/click **solid** or **hole** shapes onto a workplane, drag to move (grid-sna
 ### 2.5 `cad-brep-opencascade.html` — Real B-Rep (OpenCascade)
 Loads the genuine OCCT kernel (same as FreeCAD) via **Replicad 0.23.1 + replicad-opencascadejs 0.23.0** from CDN (esm.sh + jsdelivr for the 10.8 MB `replicad_single.wasm`). Gives **true fillets/chamfers** and **STEP export**. UI: primitives, move/rotate/recolor, booleans, fillet/chamfer (radius prompt), STL + STEP export, real edge rendering, exact volume, orbit, undo/redo, loud kernel status pill + error screen.
 
-**STATUS: NOT WORKING / UNVERIFIED — see §4.1. Recommend users use hosted Chili3d instead (via launcher).**
+**STATUS: ✅ WORKING over http(s) — kernel self-hosted in `vendor/`, CDN fallback, boot timeouts. Hosted Chili3d remains a fallback via the launcher.**
 
 ---
 
@@ -154,7 +174,8 @@ Legend: ⬜ untested · ✅ pass · ❌ fail (file a bug)
 
 ## 4. Known issues / bugs to fix
 
-### 4.1 🔴 CRITICAL — `cad-brep-opencascade.html` hangs on "Loading…"
+### 4.1 ✅ FIXED — `cad-brep-opencascade.html` hangs on "Loading…"
+**Fix shipped:** kernel self-hosted in `vendor/` (local-first, CDN fallback, timeouts, progress). Root cause confirmed: `file://`. Serve over http.
 **Symptom:** kernel status pill stuck on "Loading OpenCascade…"; never green, never error.
 **Diagnosis (likely):** the 10.8 MB WASM bootstrap is fragile under `file://`. Two probable causes: (a) the dynamic `import()` of the Emscripten loader via esm.sh stalls, or (b) `locateFile` returns the jsdelivr `.wasm` URL but the fetch is blocked/stalled by CORS or `file://` restrictions, and the Emscripten `Module.ready` promise **never rejects** (so no error screen fires).
 **Kernel file shape (confirmed):** `replicad_single.js` is Emscripten MODULARIZE, `export default Module` where `Module` is a factory `function(Module){…; return Module.ready}`; it calls `run()` at load. So `mod.default({locateFile})` is the correct call — the hang is in load/instantiate, not the API call.
@@ -165,13 +186,13 @@ Legend: ⬜ untested · ✅ pass · ❌ fail (file a bug)
 4. Add real progress: fetch the `.wasm` yourself with `fetch()` + `Response` progress, pass bytes via `Module.wasmBinary`.
 **Fallback already shipped:** `open-cad-launcher.html` points users to hosted **Chili3d / Replicad Studio / CascadeStudio** (same OCCT kernel, packaged correctly). Consider this the primary B-Rep path unless self-hosting is set up.
 
-### 4.2 🟡 Undo/redo off-by-one on drag (laser + cad)
+### 4.2 ✅ FIXED — Undo/redo off-by-one on drag (laser + cad)
 Drag operations snapshot the *pre* state on `pointerup` but don't always commit the *post* state, so **redo** after undoing a drag may not restore the moved position. Normalize history: snapshot before mutation, commit after every committed action.
 
-### 4.3 🟡 Rotated-object resize (laser)
+### 4.3 ✅ FIXED — Rotated-object resize (laser)
 Resizing a rotated shape resizes along world axes, not the object's local axes. Implement resize in the object's local (unrotated) frame around the fixed opposite handle.
 
-### 4.4 🟡 Text is not cut-ready
+### 4.4 ✅ FIXED — Text is not cut-ready
 Laser tools export text as `<text>` (SVG) and skip it in G-code/`.lbrn`. For actual cutting/engraving, vectorize glyphs to paths (e.g. opentype.js → path outlines) so text becomes real geometry in all exporters.
 
 ### 4.5 🟢 Main-thread CSG jank (3D)
