@@ -22,6 +22,8 @@ The kickoff below was executed end-to-end. Summary of what changed:
 | New bugs found & fixed during the matrix | 3D canvas rendered at 2× CSS size on Retina (`inset:0` doesn't stretch a replaced element) — blocks-3d's shape tray was completely unusable; laser tools could boot at negative zoom (fit-before-layout race) |
 | Tests | `tests/` — 260 Node asserts that **extract the shipped functions from the HTML files** (rotated resize ×188, history ×24, mass props ×18, text vectorization ×30). Run: `node tests/<name>.test.js` |
 
+| ✨ NEW: AI modeling copilot (cad-studio) | ✅ Chat panel ("✨ AI" button) drives the real engine via Claude tool-use: get_scene (world bboxes), add/edit/duplicate/delete, booleans, params, mass inspect, view. Understands references ("that box", "touching the back-left corner") from live scene state; every AI edit goes through pushHist → fully undoable. Bring-your-own Anthropic API key (localStorage, direct CORS call). Tool loop verified with a mocked API; helpers unit-tested (tests/chat-tools.test.js, 21 asserts) |
+
 **Not done / still open:** P1 backlog (edge-select fillet, sketch-on-face, on-canvas gizmo, DXF, kerf offset), P2 (Manifold WASM, Web Worker CSG §4.5, shared-module refactor §4.6), Figma mockups (§5.5.2 — tokens + implemented HTML serve as the living spec). Text export uses single-stroke glyphs (ideal for engrave/score; for thick outline cuts, a future opentype.js path remains §6 P1-9).
 
 ---

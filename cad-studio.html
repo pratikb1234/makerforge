@@ -88,6 +88,30 @@
     .drawerBtn{display:inline-flex}
   }
 </style>
+<style>
+  /* ===== AI modeling copilot dock ===== */
+  .chatdock{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);background:var(--panel);border-left:1px solid var(--line2);z-index:70;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .18s ease;box-shadow:-12px 0 30px rgba(0,0,0,.35)}
+  .chatdock.open{transform:none}
+  .chatdock header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .chatdock header b{flex:1;font-size:13px}
+  .chatdock .setup{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+  .chatdock .setup label{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .chatmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.55}
+  .cmsg{max-width:100%;white-space:pre-wrap;overflow-wrap:break-word;border-radius:10px;padding:8px 11px}
+  .cmsg.user{background:var(--panel2);border:1px solid var(--line2);align-self:flex-end}
+  .cmsg.ai{background:transparent;border:1px solid var(--line);align-self:flex-start}
+  .cmsg.err{border:1px solid var(--danger);color:var(--danger)}
+  .ctool{align-self:flex-start;font-size:11px;color:var(--mut);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:var(--font-mono,monospace)}
+  .ctool.ok::before{content:'⚙ '}
+  .chatrow{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+  .chatrow textarea{flex:1;resize:none;min-height:38px;max-height:120px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font:inherit;font-size:12.5px}
+  .chatsug{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
+  .chatsug button{font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .chatsug button:hover{color:var(--txt);border-color:var(--line2)}
+  .cthink{align-self:flex-start;color:var(--mut);font-size:11.5px;display:none}
+  .cthink.on{display:block;animation:blink 1.2s ease infinite}
+  @keyframes blink{50%{opacity:.35}}
+</style>
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -135,6 +159,7 @@
       <button class="btn" id="mMeasure" aria-label="Measure distance">📏 Measure</button>
       <button class="btn" id="mSection" aria-label="Section view">✂ Section</button>
       <button class="btn" id="mInspect" title="Mass properties (volume, area, centroid, mass)" aria-label="Inspect mass properties">🔍 Inspect</button>
+      <button class="btn" id="mChat" title="AI modeling copilot — describe what to build or change" aria-label="AI modeling copilot" aria-expanded="false">✨ AI</button>
     </div>
     <div style="flex:1"></div>
     <div class="g" style="border:none">
@@ -231,6 +256,42 @@
   </div>
 </div>
 
+<aside class="chatdock" id="chatDock" role="complementary" aria-label="AI modeling copilot">
+  <header>
+    <b>✨ AI modeling copilot</b>
+    <button class="btn" id="chatClear" title="Clear conversation" aria-label="Clear conversation">🧹</button>
+    <button class="btn" id="chatClose" aria-label="Close AI panel">✕</button>
+  </header>
+  <div class="setup" id="chatSetup">
+    <label for="chatKey">Anthropic API key (stored only in this browser)</label>
+    <input type="password" id="chatKey" placeholder="sk-ant-…" autocomplete="off">
+    <label for="chatModel">Model</label>
+    <select id="chatModel">
+      <option value="claude-sonnet-5" selected>Claude Sonnet 5 (recommended)</option>
+      <option value="claude-fable-5">Claude Fable 5 (most capable)</option>
+      <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fastest)</option>
+    </select>
+  </div>
+  <div class="chatmsgs" id="chatMsgs" aria-live="polite">
+    <div class="cmsg ai">Hi! I can see and edit the model. Try:
+• "make the plate 10 mm thicker"
+• "put a 20 mm cube on top of the plate, touching the back-left corner"
+• "cut a 6 mm hole through the middle"
+I use the same timeline as you — everything I do is undoable with Ctrl+Z.</div>
+  </div>
+  <div class="cthink" id="chatThink">thinking…</div>
+  <div class="chatsug">
+    <button data-sug="Make the plate 10 mm thicker.">plate +10mm</button>
+    <button data-sug="Add a 20 mm cube sitting on top of the plate at its back-left corner, touching both edges.">cube on corner</button>
+    <button data-sug="Cut a 6 mm diameter hole through the centre of the plate.">hole in centre</button>
+    <button data-sug="What is the volume and estimated PLA weight of the model?">weigh it</button>
+  </div>
+  <div class="chatrow">
+    <textarea id="chatInput" rows="1" placeholder="Describe what to build or change…" aria-label="Message the AI copilot"></textarea>
+    <button class="btn pri" id="chatSend" aria-label="Send">➤</button>
+    <button class="btn" id="chatStop" aria-label="Stop" style="display:none">■</button>
+  </div>
+</aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="modal-bg" id="mbg"><div class="modal" id="modal"></div></div>
 <div class="modal-bg" id="tourBg"><div class="modal tour" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
@@ -737,6 +798,226 @@ boot();
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bg.classList.contains('show'))done();});
     setTimeout(()=>$('#tourDone').focus(),0);
   }
+})();
+</script>
+<script>
+/* =====================================================================
+   ✨ AI modeling copilot — natural-language modeling via Claude tool use.
+   The model gets a tool belt over the SAME engine the UI uses (newFeature,
+   pushHist, rebuild, massProps…), so every AI edit lands in the feature
+   timeline and is undoable with Ctrl+Z. The API key is user-supplied and
+   stored only in localStorage; calls go directly to the Anthropic API
+   (CORS enabled via anthropic-dangerous-direct-browser-access).
+   ===================================================================== */
+
+/* ---- pure helpers (unit-tested in tests/chat-tools.test.js) ---- */
+/* Whitelisted, type-coerced application of edits to a feature object.
+   Returns {applied:{k:v}, rejected:[k]} and mutates f only for valid keys. */
+function applyFeatureChanges(f,changes){
+  const NUMERIC=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','x','y','z','rx','ry','rz','opacity'];
+  const BOOL=['visible','suppressed','sym'];
+  const applied={},rejected=[];
+  for(const k in changes){
+    const v=changes[k];
+    if(k==='name'&&typeof v==='string'&&v.trim()){f.name=v.trim();applied[k]=f.name;}
+    else if(k==='color'&&/^#[0-9a-fA-F]{6}$/.test(String(v))){f.color=String(v);applied[k]=f.color;}
+    else if(BOOL.includes(k)){f[k]=(v===true||v==='true');applied[k]=f[k];}
+    else if(NUMERIC.includes(k)){
+      const n=Number(v);
+      if(isFinite(n)&&(k in f||['x','y','z','rx','ry','rz'].includes(k))){f[k]=n;applied[k]=n;}
+      else rejected.push(k);
+    }
+    else rejected.push(k);
+  }
+  return{applied,rejected};
+}
+/* Compact scene description for the model. Pure: takes plain data.
+   bboxMap: id -> {min:[x,y,z], max:[x,y,z]} world-space (only live bodies). */
+function chatSceneSummary(features,bboxMap,params,selIds){
+  const DIMS=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','profile','plane','sym'];
+  const consumedBy={};
+  features.forEach(f=>{if(f.type==='boolean'&&!f.suppressed){consumedBy[f.aId]=f.id;consumedBy[f.bId]=f.id;}});
+  const round=v=>Math.round(v*100)/100;
+  return{
+    units:'mm',up_axis:'Y (ground plane is y=0)',
+    named_parameters:params,
+    selected_ids:selIds,
+    features:features.map(f=>{
+      const dims={};DIMS.forEach(k=>{if(f[k]!==undefined)dims[k]=f[k];});
+      const out={id:f.id,name:f.name,type:f.type,color:f.color,visible:f.visible,suppressed:f.suppressed,dims,
+        position:{x:f.x||0,y:f.y||0,z:f.z||0},rotation_deg:{rx:f.rx||0,ry:f.ry||0,rz:f.rz||0}};
+      if(f.type==='boolean'){out.op=f.op;out.input_ids=[f.aId,f.bId];delete out.dims;delete out.position;delete out.rotation_deg;}
+      if(consumedBy[f.id])out.consumed_by_boolean=consumedBy[f.id];
+      const bb=bboxMap[f.id];
+      if(bb)out.world_bbox={min:bb.min.map(round),max:bb.max.map(round),
+        size:[bb.max[0]-bb.min[0],bb.max[1]-bb.min[1],bb.max[2]-bb.min[2]].map(round),
+        center:[(bb.min[0]+bb.max[0])/2,(bb.min[1]+bb.max[1])/2,(bb.min[2]+bb.max[2])/2].map(round)};
+      return out;
+    })
+  };
+}
+
+/* ---- tool belt ---- */
+const CHAT_TOOLS=[
+ {name:'get_scene',description:'Read the full current scene: every timeline feature (id, name, type, dims, CENTER position in mm, rotation, color, visibility, boolean relationships) plus world-space bounding boxes of live bodies, the current selection and named parameters. Call this before editing anything you did not just create — ids and geometry may have changed.',input_schema:{type:'object',properties:{}}},
+ {name:'add_body',description:'Add a primitive body to the timeline. position is the body CENTER in mm (Y up): a box of height h sitting on the ground needs position.y = h/2. Dims: box {w (X), d (Z), h (Y)}; cylinder {r,h} (axis Y); sphere {r}; cone {r1 bottom, r2 top, h}; torus {r ring, tube}. Returns the new feature id.',input_schema:{type:'object',properties:{
+   kind:{type:'string',enum:['box','cylinder','sphere','cone','torus']},
+   name:{type:'string'},color:{type:'string',description:'#rrggbb'},
+   dims:{type:'object',description:'dimension overrides for the kind, in mm'},
+   position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},
+   rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}},description:'degrees'}},required:['kind']}},
+ {name:'edit_feature',description:'Change properties of an existing feature by id: any dim (w,d,h,r,…), position x/y/z (center, mm), rotation rx/ry/rz (deg), name, color, visible, suppressed. The model rebuilds automatically.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'duplicate_feature',description:'Duplicate a (non-boolean) feature, offset by dx/dy/dz mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'},dz:{type:'number'}},required:['id']}},
+ {name:'delete_features',description:'Delete features by id. Booleans referencing a deleted input are removed too.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
+ {name:'boolean_op',description:'Boolean two LIVE bodies (not already consumed): union (combine), subtract (cut b from a), intersect. Creates a new timeline feature; both inputs become consumed.',input_schema:{type:'object',properties:{op:{type:'string',enum:['union','subtract','intersect']},a_id:{type:'integer'},b_id:{type:'integer'}},required:['op','a_id','b_id']}},
+ {name:'set_parameter',description:'Create or update a named parameter usable in expressions (e.g. wall=3).',input_schema:{type:'object',properties:{name:{type:'string'},value:{type:'number'}},required:['name','value']}},
+ {name:'inspect_mass',description:'Mass properties of the selected ids (or all visible bodies if ids omitted): volume mm³, surface area, centroid, watertight flag, mass in g for a density g/cm³ (PLA 1.24, ABS 1.04, steel 7.85, alu 2.70).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},density:{type:'number'}}}},
+ {name:'set_view',description:'Change the camera: iso|front|top|right|fit.',input_schema:{type:'object',properties:{view:{type:'string',enum:['iso','front','top','right','fit']}},required:['view']}},
+ {name:'select_features',description:'Set the UI selection (highlights bodies for the user).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}}
+];
+
+function chatBBoxMap(){
+  const map={};
+  bodyGroup.children.forEach(m=>{
+    if(!m.geometry)return;m.geometry.computeBoundingBox();const b=m.geometry.boundingBox;
+    map[m.userData.fid]={min:[b.min.x,b.min.y,b.min.z],max:[b.max.x,b.max.y,b.max.z]};
+  });
+  return map;
+}
+function chatExecTool(name,args){
+  const find=id=>APP.features.find(f=>f.id===id);
+  switch(name){
+    case 'get_scene':
+      return chatSceneSummary(APP.features,chatBBoxMap(),APP.params,[...APP.sel]);
+    case 'add_body':{
+      const f=newFeature(args.kind);if(!f)return{error:'unknown kind'};
+      if(args.name)f.name=String(args.name);
+      if(args.color&&/^#[0-9a-fA-F]{6}$/.test(args.color))f.color=args.color;
+      const ch=Object.assign({},args.dims||{},args.position||{},args.rotation||{});
+      const res=applyFeatureChanges(f,ch);
+      APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
+      return{id:f.id,name:f.name,applied:res.applied,rejected:res.rejected};
+    }
+    case 'edit_feature':{
+      const f=find(args.id);if(!f)return{error:'no feature '+args.id};
+      if(f.type==='boolean')return{error:'booleans have no editable dims; edit their inputs'};
+      const res=applyFeatureChanges(f,args.changes||{});
+      pushHist();syncSel();rebuild();
+      return{id:f.id,applied:res.applied,rejected:res.rejected};
+    }
+    case 'duplicate_feature':{
+      const f=find(args.id);if(!f)return{error:'no feature '+args.id};
+      if(f.type==='boolean')return{error:'cannot duplicate a boolean'};
+      const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' copy';
+      c.x=(c.x||0)+(+args.dx||0);c.y=(c.y||0)+(+args.dy||0);c.z=(c.z||0)+(+args.dz||0);
+      APP.features.push(c);APP.sel=new Set([c.id]);pushHist();syncSel();rebuild();
+      return{id:c.id,name:c.name};
+    }
+    case 'delete_features':{
+      const ids=new Set((args.ids||[]).map(Number));
+      const before=APP.features.length;
+      APP.features=APP.features.filter(f=>!ids.has(f.id));
+      const live=new Set(APP.features.map(f=>f.id));
+      APP.features=APP.features.filter(f=>f.type!=='boolean'||(live.has(f.aId)&&live.has(f.bId)));
+      APP.sel.clear();pushHist();syncSel();rebuild();
+      return{deleted:before-APP.features.length};
+    }
+    case 'boolean_op':{
+      const a=find(args.a_id),b=find(args.b_id);
+      if(!a||!b)return{error:'missing input feature'};
+      if(isConsumed(a.id)||isConsumed(b.id))return{error:'an input is already consumed by another boolean'};
+      const f={id:uid(),type:'boolean',op:args.op,name:(args.op==='union'?'Combine':args.op==='subtract'?'Cut':'Intersect'),color:a.color,visible:true,suppressed:false,aId:a.id,bId:b.id};
+      APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
+      return{id:f.id,op:args.op};
+    }
+    case 'set_parameter':{
+      if(!/^[a-zA-Z_]\w*$/.test(String(args.name)))return{error:'bad name'};
+      APP.params[args.name]=Number(args.value)||0;pushHist();renderParams();rebuild();
+      return{params:APP.params};
+    }
+    case 'inspect_mass':{
+      const ids=args.ids&&args.ids.length?args.ids.map(Number):null;
+      const meshes=bodyGroup.children.filter(m=>ids?ids.includes(m.userData.fid):true);
+      const tris=[];meshes.forEach(m=>{const p=m.geometry.attributes.position.array;for(let i=0;i<p.length;i+=9)tris.push([p[i],p[i+1],p[i+2],p[i+3],p[i+4],p[i+5],p[i+6],p[i+7],p[i+8]]);});
+      if(!tris.length)return{error:'nothing to inspect'};
+      const mp=massProps(tris);const d=+args.density||1.24;
+      return{volume_mm3:+mp.volume.toFixed(1),surface_area_mm2:+mp.area.toFixed(1),centroid:mp.centroid,watertight:mp.watertight,open_edges:mp.openEdges,density_g_cm3:d,mass_g:+(mp.volume/1000*d).toFixed(1)};
+    }
+    case 'set_view':
+      if(args.view==='fit')fitView();else setView(args.view);
+      return{ok:true};
+    case 'select_features':{
+      APP.sel=new Set((args.ids||[]).map(Number).filter(id=>find(id)));syncSel();rebuild();
+      return{selected:[...APP.sel]};
+    }
+    default:return{error:'unknown tool '+name};
+  }
+}
+
+/* ---- agent loop + UI ---- */
+(function(){
+  const $id=s=>document.getElementById(s);
+  const dock=$id('chatDock'),msgs=$id('chatMsgs'),input=$id('chatInput'),send=$id('chatSend'),
+        stopB=$id('chatStop'),think=$id('chatThink'),keyIn=$id('chatKey'),modelSel=$id('chatModel');
+  const SYS=`You are the modeling copilot inside MakerForge 3D CAD (a parametric feature-timeline mesh CAD, Three.js, millimetres, Y is up, ground plane y=0, positions are body CENTERS).
+Ground rules:
+- Call get_scene FIRST whenever the user refers to existing geometry ("that box", "the plate", "the hole") — resolve references by name, type, selection and world_bbox.
+- Think in real coordinates: "on top of X touching the back-left corner" means compute exact centers from X's world_bbox and the new body's dims so faces/edges actually touch (no gaps, no overlaps unless asked).
+- To cut holes: add the cutting body (e.g. cylinder through the part), then boolean_op subtract with the part as a_id.
+- Prefer editing existing features over deleting and recreating. Keep edits minimal.
+- After building something, set_view fit sparingly (only when you created things off-screen).
+- Every change is applied to the user's real timeline and is undoable; briefly say WHAT you did, not tool names. Use mm. Be concise.`;
+  let history=[],busy=false,ctrl=null;
+  try{keyIn.value=localStorage.getItem('mkf_anthropic_key')||'';}catch(_){/* storage blocked */}
+  keyIn.addEventListener('change',()=>{try{localStorage.setItem('mkf_anthropic_key',keyIn.value.trim());}catch(_){}});
+  const add=(cls,text)=>{const d=document.createElement('div');d.className='cmsg '+cls;d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;};
+  const chip=t=>{const d=document.createElement('div');d.className='ctool ok';d.textContent=t;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;};
+  function setBusy(b){busy=b;think.classList.toggle('on',b);send.style.display=b?'none':'';stopB.style.display=b?'':'none';}
+  async function callClaude(){
+    const key=keyIn.value.trim();
+    const body={model:modelSel.value,max_tokens:2048,system:SYS,tools:CHAT_TOOLS,messages:history};
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,
+      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify(body)});
+    if(!res.ok){const t=await res.text();throw new Error('API '+res.status+': '+t.slice(0,300));}
+    return res.json();
+  }
+  async function run(userText){
+    if(busy)return;
+    if(!keyIn.value.trim()){add('err','Add your Anthropic API key above first (console.anthropic.com → API keys). It never leaves this browser except to call the API.');keyIn.focus();return;}
+    add('user',userText);
+    history.push({role:'user',content:userText});
+    if(history.length>40)history=history.slice(-30); // keep context bounded
+    setBusy(true);ctrl=new AbortController();
+    try{
+      for(let round=0;round<12;round++){
+        const r=await callClaude();
+        history.push({role:'assistant',content:r.content});
+        const toolUses=r.content.filter(b=>b.type==='tool_use');
+        r.content.filter(b=>b.type==='text'&&b.text.trim()).forEach(b=>add('ai',b.text));
+        if(r.stop_reason!=='tool_use'||!toolUses.length)break;
+        const results=toolUses.map(tu=>{
+          let out;try{out=chatExecTool(tu.name,tu.input||{});}catch(e){out={error:String(e)};}
+          chip(tu.name+(tu.input&&tu.input.kind?' · '+tu.input.kind:tu.input&&tu.input.id!==undefined?' · #'+tu.input.id:''));
+          return{type:'tool_result',tool_use_id:tu.id,content:JSON.stringify(out)};
+        });
+        history.push({role:'user',content:results});
+      }
+    }catch(e){
+      if(e.name!=='AbortError')add('err',String(e.message||e));
+      else add('ai','(stopped)');
+    }
+    setBusy(false);
+  }
+  const submit=()=>{const t=input.value.trim();if(!t)return;input.value='';run(t);};
+  send.addEventListener('click',submit);
+  stopB.addEventListener('click',()=>ctrl&&ctrl.abort());
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit();}});
+  document.querySelectorAll('.chatsug button').forEach(b=>b.addEventListener('click',()=>{input.value=b.dataset.sug;submit();}));
+  const toggle=open=>{dock.classList.toggle('open',open);$id('mChat').setAttribute('aria-expanded',String(open));if(open)input.focus();};
+  $id('mChat').addEventListener('click',()=>toggle(!dock.classList.contains('open')));
+  $id('chatClose').addEventListener('click',()=>toggle(false));
+  $id('chatClear').addEventListener('click',()=>{history=[];msgs.querySelectorAll('.cmsg.user,.cmsg.ai:not(:first-child),.cmsg.err,.ctool').forEach(n=>n.remove());});
 })();
 </script>
 </body>
