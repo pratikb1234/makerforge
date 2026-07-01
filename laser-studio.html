@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MakerForge · Laser CAD Studio</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
   :root{
-    --bg:#0f1216; --panel:#171b21; --panel2:#1e242c; --line:#2a323c; --line2:#39434f;
-    --txt:#e7edf3; --mut:#8b97a6; --acc:#4c9ffe; --acc2:#2b7fe0; --ok:#3ecf8e; --warn:#ffb454; --danger:#ff5f6d;
-    --shadow:0 6px 24px rgba(0,0,0,.4);
+    /* Palette remapped onto the shared MakerForge token system (tokens.css).
+       Old --mut:#8b97a6 failed WCAG AA; --tk-mut is 6.9:1 on panel. */
+    --bg:var(--tk-bg); --panel:var(--tk-panel); --panel2:var(--tk-panel-2); --line:var(--tk-line); --line2:var(--tk-line-2);
+    --txt:var(--tk-text); --mut:var(--tk-mut); --acc:var(--tk-blue); --acc2:#2b7fe0; --ok:var(--tk-ok); --warn:var(--tk-warn); --danger:var(--tk-danger);
+    --shadow:var(--tk-shadow);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;font-size:13px;-webkit-user-select:none;user-select:none}
@@ -78,8 +81,8 @@
   .pill.score{background:rgba(62,207,142,.18);color:#66e0ac}
   /* ---- estimate ---- */
   .est{background:linear-gradient(160deg,#1a2028,#141a20);border:1px solid var(--line2);border-radius:10px;padding:12px}
-  .est .big{font-size:26px;font-weight:800;letter-spacing:-.5px;color:#fff;line-height:1}
-  .est .big small{font-size:13px;color:var(--mut);font-weight:600}
+  .est .big{font-size:calc(var(--fs-xl)*2);font-weight:800;letter-spacing:-.5px;color:var(--tk-acc);line-height:1}
+  .est .big small{font-size:14px;color:var(--mut);font-weight:600}
   .est .brk{margin-top:9px;display:flex;flex-direction:column;gap:4px}
   .est .brk div{display:flex;justify-content:space-between;font-size:11px;color:var(--mut)}
   .est .brk b{color:var(--txt);font-weight:600}
@@ -111,76 +114,135 @@
   ::-webkit-scrollbar-track{background:transparent}
   .checkline{display:flex;align-items:center;gap:7px;color:var(--mut);font-size:11px}
   .checkline input{accent-color:var(--acc)}
+  /* ---- inline SVG icons ---- */
+  .ic{width:18px;height:18px;display:block;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .btn .ic{width:16px;height:16px}
+  /* ---- collapsible section header buttons ---- */
+  .sec h3 .sec-toggle{flex:1;display:flex;justify-content:space-between;align-items:center;gap:6px;background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;text-align:left}
+  /* ---- responsive: right panel becomes an overlay drawer ≤1000px ---- */
+  #btnPanel{display:none}
+  @media (max-width:1000px){
+    #btnPanel{display:inline-flex}
+    .main{grid-template-columns:52px 1fr}
+    .side{position:fixed;top:0;right:0;bottom:0;width:min(300px,85vw);z-index:50;box-shadow:var(--shadow);transform:translateX(100%);visibility:hidden;transition:transform .2s ease}
+    body.panel-open .side{transform:none;visibility:visible}
+  }
+  /* ---- first-run coach overlay ---- */
+  .tour-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:90;display:none;align-items:center;justify-content:center}
+  .tour{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:20px 22px;width:min(440px,90vw);box-shadow:var(--shadow)}
+  .tour h2{margin:0 0 6px;font-size:16px}
+  .tour ul{margin:10px 0 16px;padding-left:18px;color:var(--mut);line-height:1.8;font-size:12.5px}
+  .tour li b{color:var(--txt)}
+  .tour .foot{display:flex;justify-content:flex-end}
 </style>
 </head>
-<body>
+<body data-theme="dark">
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v10M8 9l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-al-left" viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="8" y="5" width="12" height="4" rx="1"/><rect x="8" y="15" width="7" height="4" rx="1"/></symbol>
+  <symbol id="i-al-cx" viewBox="0 0 24 24"><path d="M12 2v2M12 20v2"/><rect x="6" y="5" width="12" height="4" rx="1"/><rect x="8.5" y="15" width="7" height="4" rx="1"/></symbol>
+  <symbol id="i-al-right" viewBox="0 0 24 24"><path d="M20 3v18"/><rect x="4" y="5" width="12" height="4" rx="1"/><rect x="9" y="15" width="7" height="4" rx="1"/></symbol>
+  <symbol id="i-al-top" viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="5" y="8" width="4" height="12" rx="1"/><rect x="15" y="8" width="4" height="7" rx="1"/></symbol>
+  <symbol id="i-al-cy" viewBox="0 0 24 24"><path d="M2 12h2M20 12h2"/><rect x="5" y="6" width="4" height="12" rx="1"/><rect x="15" y="8.5" width="4" height="7" rx="1"/></symbol>
+  <symbol id="i-al-bottom" viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="5" y="4" width="4" height="12" rx="1"/><rect x="15" y="9" width="4" height="7" rx="1"/></symbol>
+  <symbol id="i-dist-h" viewBox="0 0 24 24"><rect x="3" y="7" width="4" height="10" rx="1"/><rect x="10" y="5" width="4" height="14" rx="1"/><rect x="17" y="7" width="4" height="10" rx="1"/></symbol>
+  <symbol id="i-dist-v" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="4" rx="1"/><rect x="5" y="10" width="14" height="4" rx="1"/><rect x="7" y="17" width="10" height="4" rx="1"/></symbol>
+  <symbol id="i-union" viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
+  <symbol id="i-group" viewBox="0 0 24 24"><rect x="3" y="3" width="11" height="11" rx="2"/><rect x="10" y="10" width="11" height="11" rx="2"/></symbol>
+  <symbol id="i-ungroup" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-front" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M20 8v10a2 2 0 0 1-2 2H8"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M4 3l7.1 17 2.5-7.4L21 10.1 4 3z"/></symbol>
+  <symbol id="i-node" viewBox="0 0 24 24"><path d="M7 17c2-8 8-8 10 0"/><rect x="3" y="16" width="4" height="4"/><rect x="17" y="16" width="4" height="4"/><rect x="10" y="4" width="4" height="4"/></symbol>
+  <symbol id="i-rect" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></symbol>
+  <symbol id="i-ellipse" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="7"/></symbol>
+  <symbol id="i-poly" viewBox="0 0 24 24"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9L12 3z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7L12 3z"/></symbol>
+  <symbol id="i-line" viewBox="0 0 24 24"><path d="M5 19 19 5"/><circle cx="5" cy="19" r="1.5"/><circle cx="19" cy="5" r="1.5"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3M12 4v16M9 20h6"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.3l-3-3a2 2 0 0 1 2.8-2.8L8 16"/></symbol>
+</svg>
 <div class="app">
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="brand"><span class="dot"></span> MakerForge <small>Laser CAD Studio</small></div>
-    <div class="tb-group">
-      <button class="btn sm" id="btnNew">＋ New</button>
-      <button class="btn sm" id="btnImport">⇪ Import SVG</button>
-      <button class="btn sm" id="btnSave">💾 Save</button>
-      <button class="btn sm" id="btnOpen">📂 Open</button>
+    <div class="tb-group" role="toolbar" aria-label="File">
+      <button class="btn sm" id="btnNew"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg> New</button>
+      <button class="btn sm" id="btnImport"><svg class="ic" aria-hidden="true"><use href="#i-import"/></svg> Import SVG</button>
+      <button class="btn sm" id="btnSave"><svg class="ic" aria-hidden="true"><use href="#i-save"/></svg> Save</button>
+      <button class="btn sm" id="btnOpen"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg> Open</button>
     </div>
-    <div class="tb-group">
-      <button class="btn icon" id="btnUndo" title="Undo (Ctrl+Z)">↶</button>
-      <button class="btn icon" id="btnRedo" title="Redo (Ctrl+Y)">↷</button>
-      <button class="btn icon" id="btnDup" title="Duplicate (Ctrl+D)">⧉</button>
-      <button class="btn icon" id="btnDel" title="Delete (Del)">🗑</button>
+    <div class="tb-group" role="toolbar" aria-label="Edit">
+      <button class="btn icon" id="btnUndo" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+      <button class="btn icon" id="btnRedo" title="Redo (Ctrl+Y)" aria-label="Redo (Ctrl+Y)"><svg class="ic" aria-hidden="true"><use href="#i-redo"/></svg></button>
+      <button class="btn icon" id="btnDup" title="Duplicate (Ctrl+D)" aria-label="Duplicate (Ctrl+D)"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button>
+      <button class="btn icon" id="btnDel" title="Delete (Del)" aria-label="Delete (Del)"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
     </div>
-    <div class="tb-group" id="alignGroup">
-      <button class="btn icon" data-al="left" title="Align left">⇤</button>
-      <button class="btn icon" data-al="cx" title="Align center X">⇔</button>
-      <button class="btn icon" data-al="right" title="Align right">⇥</button>
-      <button class="btn icon" data-al="top" title="Align top">⤒</button>
-      <button class="btn icon" data-al="cy" title="Align middle Y">⇕</button>
-      <button class="btn icon" data-al="bottom" title="Align bottom">⤓</button>
-      <button class="btn icon" data-al="dh" title="Distribute horizontally">░</button>
-      <button class="btn icon" data-al="dv" title="Distribute vertically">▤</button>
+    <div class="tb-group" id="alignGroup" role="toolbar" aria-label="Align and distribute">
+      <button class="btn icon" data-al="left" title="Align left" aria-label="Align left"><svg class="ic" aria-hidden="true"><use href="#i-al-left"/></svg></button>
+      <button class="btn icon" data-al="cx" title="Align center X" aria-label="Align center X"><svg class="ic" aria-hidden="true"><use href="#i-al-cx"/></svg></button>
+      <button class="btn icon" data-al="right" title="Align right" aria-label="Align right"><svg class="ic" aria-hidden="true"><use href="#i-al-right"/></svg></button>
+      <button class="btn icon" data-al="top" title="Align top" aria-label="Align top"><svg class="ic" aria-hidden="true"><use href="#i-al-top"/></svg></button>
+      <button class="btn icon" data-al="cy" title="Align middle Y" aria-label="Align middle Y"><svg class="ic" aria-hidden="true"><use href="#i-al-cy"/></svg></button>
+      <button class="btn icon" data-al="bottom" title="Align bottom" aria-label="Align bottom"><svg class="ic" aria-hidden="true"><use href="#i-al-bottom"/></svg></button>
+      <button class="btn icon" data-al="dh" title="Distribute horizontally" aria-label="Distribute horizontally"><svg class="ic" aria-hidden="true"><use href="#i-dist-h"/></svg></button>
+      <button class="btn icon" data-al="dv" title="Distribute vertically" aria-label="Distribute vertically"><svg class="ic" aria-hidden="true"><use href="#i-dist-v"/></svg></button>
     </div>
-    <div class="tb-group">
-      <button class="btn icon" data-bool="union" title="Union" disabled>◑</button>
-      <button class="btn icon" id="btnGroup" title="Group (Ctrl+G)">▣</button>
-      <button class="btn icon" id="btnUngroup" title="Ungroup">▢</button>
-      <button class="btn icon" id="btnFront" title="Bring to front">⬆</button>
-      <button class="btn icon" id="btnBack" title="Send to back">⬇</button>
+    <div class="tb-group" role="toolbar" aria-label="Arrange">
+      <button class="btn icon" data-bool="union" title="Union" aria-label="Union" disabled><svg class="ic" aria-hidden="true"><use href="#i-union"/></svg></button>
+      <button class="btn icon" id="btnGroup" title="Group (Ctrl+G)" aria-label="Group (Ctrl+G)"><svg class="ic" aria-hidden="true"><use href="#i-group"/></svg></button>
+      <button class="btn icon" id="btnUngroup" title="Ungroup" aria-label="Ungroup"><svg class="ic" aria-hidden="true"><use href="#i-ungroup"/></svg></button>
+      <button class="btn icon" id="btnFront" title="Bring to front" aria-label="Bring to front"><svg class="ic" aria-hidden="true"><use href="#i-front"/></svg></button>
+      <button class="btn icon" id="btnBack" title="Send to back" aria-label="Send to back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
     </div>
     <div style="flex:1"></div>
-    <div class="tb-group" style="border:none">
-      <button class="btn" id="btnExport">⇩ Export ▾</button>
-      <button class="btn go" id="btnRun">⚡ Send to Laser</button>
+    <button class="btn icon" id="btnPanel" title="Toggle panel" aria-label="Toggle panel" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <div class="tb-group" style="border:none" role="toolbar" aria-label="Output">
+      <button class="btn" id="btnExport"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg> Export ▾</button>
+      <button class="btn go" id="btnRun"><svg class="ic" aria-hidden="true"><use href="#i-zap"/></svg> Send to Laser</button>
     </div>
   </div>
 
   <!-- MAIN -->
   <div class="main">
     <!-- TOOL RAIL -->
-    <div class="toolrail" id="toolrail">
-      <button class="tool active" data-tool="select" title="Select / Move (V)">⤢<small>V</small></button>
-      <button class="tool" data-tool="node" title="Edit nodes (N)">✎<small>N</small></button>
+    <div class="toolrail" id="toolrail" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical">
+      <button class="tool active" data-tool="select" title="Select / Move (V)" aria-label="Select / Move (V)"><svg class="ic" aria-hidden="true"><use href="#i-cursor"/></svg><small>V</small></button>
+      <button class="tool" data-tool="node" title="Edit nodes (N)" aria-label="Edit nodes (N)"><svg class="ic" aria-hidden="true"><use href="#i-node"/></svg><small>N</small></button>
       <div class="divider" style="width:70%"></div>
-      <button class="tool" data-tool="rect" title="Rectangle (R)">▭<small>R</small></button>
-      <button class="tool" data-tool="ellipse" title="Ellipse (E)">◯<small>E</small></button>
-      <button class="tool" data-tool="poly" title="Polygon (P)">⬡<small>P</small></button>
-      <button class="tool" data-tool="star" title="Star (S)">★<small>S</small></button>
-      <button class="tool" data-tool="line" title="Line (L)">╱<small>L</small></button>
-      <button class="tool" data-tool="pen" title="Pen / Path (B)">✒<small>B</small></button>
-      <button class="tool" data-tool="text" title="Text (T)">T<small>T</small></button>
+      <button class="tool" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle (R)"><svg class="ic" aria-hidden="true"><use href="#i-rect"/></svg><small>R</small></button>
+      <button class="tool" data-tool="ellipse" title="Ellipse (E)" aria-label="Ellipse (E)"><svg class="ic" aria-hidden="true"><use href="#i-ellipse"/></svg><small>E</small></button>
+      <button class="tool" data-tool="poly" title="Polygon (P)" aria-label="Polygon (P)"><svg class="ic" aria-hidden="true"><use href="#i-poly"/></svg><small>P</small></button>
+      <button class="tool" data-tool="star" title="Star (S)" aria-label="Star (S)"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg><small>S</small></button>
+      <button class="tool" data-tool="line" title="Line (L)" aria-label="Line (L)"><svg class="ic" aria-hidden="true"><use href="#i-line"/></svg><small>L</small></button>
+      <button class="tool" data-tool="pen" title="Pen / Path (B)" aria-label="Pen / Path (B)"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg><small>B</small></button>
+      <button class="tool" data-tool="text" title="Text (T)" aria-label="Text (T)"><svg class="ic" aria-hidden="true"><use href="#i-text"/></svg><small>T</small></button>
       <div style="flex:1"></div>
-      <button class="tool" data-tool="pan" title="Pan (Space)">✋</button>
+      <button class="tool" data-tool="pan" title="Pan (Space)" aria-label="Pan (Space)"><svg class="ic" aria-hidden="true"><use href="#i-hand"/></svg></button>
     </div>
 
     <!-- CANVAS -->
     <div class="canvas-wrap" id="cwrap">
-      <canvas id="stage"></canvas>
+      <canvas id="stage" role="img" aria-label="Design canvas"></canvas>
       <div class="hud" id="hud"><span>x <b id="hx">0.0</b></span><span>y <b id="hy">0.0</b></span><span id="hextra"></span></div>
-      <div class="zoombar">
-        <button class="btn icon sm" id="zOut">－</button>
-        <button class="btn sm" id="zLabel" style="width:56px;justify-content:center">100%</button>
-        <button class="btn icon sm" id="zIn">＋</button>
-        <button class="btn icon sm" id="zFit" title="Fit">▣</button>
+      <div class="zoombar" role="toolbar" aria-label="Zoom">
+        <button class="btn icon sm" id="zOut" title="Zoom out" aria-label="Zoom out"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button>
+        <button class="btn sm" id="zLabel" style="width:56px;justify-content:center" title="Zoom level — click to fit">100%</button>
+        <button class="btn icon sm" id="zIn" title="Zoom in" aria-label="Zoom in"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        <button class="btn icon sm" id="zFit" title="Fit" aria-label="Fit"><svg class="ic" aria-hidden="true"><use href="#i-fit"/></svg></button>
       </div>
     </div>
 
@@ -188,8 +250,8 @@
     <div class="side">
       <!-- DOCUMENT / MACHINE -->
       <div class="sec" id="secDoc">
-        <h3>Machine &amp; Material <span class="chev">▾</span></h3>
-        <div class="body">
+        <h3><button class="sec-toggle" aria-expanded="true" aria-controls="secDocBody">Machine &amp; Material <span class="chev" aria-hidden="true">▾</span></button></h3>
+        <div class="body" id="secDocBody">
           <div class="field">
             <span>Laser preset</span>
             <select id="machine">
@@ -227,7 +289,7 @@
 
       <!-- TRANSFORM -->
       <div class="sec" id="secXform">
-        <h3>Transform <span class="chev">▾</span></h3>
+        <h3><button class="sec-toggle" aria-expanded="true" aria-controls="xformBody">Transform <span class="chev" aria-hidden="true">▾</span></button></h3>
         <div class="body" id="xformBody">
           <div class="grid2">
             <div class="field"><span>X (mm)</span><input type="number" id="pX" step="0.1"></div>
@@ -239,9 +301,9 @@
           </div>
           <div class="checkline"><input type="checkbox" id="lockRatio"><label style="width:auto">Lock aspect ratio</label></div>
           <div class="minibtns">
-            <button class="btn sm" id="flipH">⇋ Flip H</button>
-            <button class="btn sm" id="flipV">⇅ Flip V</button>
-            <button class="btn sm" id="rot90">⟳ 90°</button>
+            <button class="btn sm" id="flipH" title="Flip horizontally" aria-label="Flip horizontally">⇋ Flip H</button>
+            <button class="btn sm" id="flipV" title="Flip vertically" aria-label="Flip vertically">⇅ Flip V</button>
+            <button class="btn sm" id="rot90" title="Rotate 90°" aria-label="Rotate 90 degrees">⟳ 90°</button>
           </div>
           <div class="hint" id="noSel">No selection. Draw a shape or pick the Select tool.</div>
         </div>
@@ -249,8 +311,8 @@
 
       <!-- LAYERS -->
       <div class="sec" id="secLayers">
-        <h3>Layers <span style="display:flex;gap:6px"><button class="btn ghost sm" id="addLayer" style="padding:2px 6px">＋</button><span class="chev">▾</span></span></h3>
-        <div class="body">
+        <h3><button class="sec-toggle" aria-expanded="true" aria-controls="secLayersBody">Layers <span class="chev" aria-hidden="true">▾</span></button><button class="btn ghost sm" id="addLayer" style="padding:2px 6px;margin-left:6px" title="Add layer" aria-label="Add layer">＋</button></h3>
+        <div class="body" id="secLayersBody">
           <div id="layerList"></div>
           <div class="divider"></div>
           <div class="hint">Selected layer settings:</div>
@@ -272,8 +334,8 @@
 
       <!-- ESTIMATE -->
       <div class="sec" id="secEst">
-        <h3>Job Estimate <span class="chev">▾</span></h3>
-        <div class="body">
+        <h3><button class="sec-toggle" aria-expanded="true" aria-controls="secEstBody">Job Estimate <span class="chev" aria-hidden="true">▾</span></button></h3>
+        <div class="body" id="secEstBody">
           <div class="est">
             <div class="big" id="estTime">0<small>s</small></div>
             <div class="barmini" id="estBar"></div>
@@ -291,7 +353,7 @@
   </div>
 
   <!-- STATUS -->
-  <div class="status">
+  <div class="status" role="status" aria-live="polite">
     <span>Tool: <b id="stTool">Select</b></span>
     <span>Sel: <b id="stSel">0</b></span>
     <span>Zoom: <b id="stZoom">100%</b></span>
@@ -303,6 +365,20 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
 <input type="file" id="fileIn" accept=".svg,.json,.mkf" style="display:none">
+
+<!-- First-run coach overlay -->
+<div class="tour-bg" id="tourOverlay" role="dialog" aria-modal="true" aria-label="Welcome tour">
+  <div class="tour">
+    <h2>Welcome to Laser Studio</h2>
+    <ul>
+      <li><b>Draw shapes</b> from the left tool rail — try <kbd>R</kbd> for rectangle or <kbd>E</kbd> for ellipse.</li>
+      <li><b>Layers are laser operations</b> — assign shapes to Cut, Engrave or Score on the right.</li>
+      <li>The <b>job estimate updates live</b> as you design, so you always know the run time.</li>
+      <li><b>Export</b> sends your design to LightBurn or G-code, ready to burn.</li>
+    </ul>
+    <div class="foot"><button class="btn pri" id="tourDone" autofocus>Got it!</button></div>
+  </div>
+</div>
 
 <script>
 /* =========================================================================
@@ -1230,6 +1306,85 @@ boot();
 
 /* expose a couple for inline handlers */
 window.closeModal=closeModal;window.toast=toast;
+
+/* =========================================================================
+   Accessibility & UX enhancements (additive — no core logic touched)
+   ========================================================================= */
+(function(){
+  /* Keyboard support for clickable non-button elements (layer rows, eye
+     toggles, color swatches). They are re-rendered by renderLayers(), so a
+     MutationObserver decorates them and a delegated handler activates them. */
+  function a11yDecorate(){
+    document.querySelectorAll('#layerList .layer').forEach(el=>{
+      if(!el.hasAttribute('tabindex')){
+        el.setAttribute('tabindex','0');el.setAttribute('role','button');
+        const nm=el.querySelector('.lname b');
+        el.setAttribute('aria-label','Select layer'+(nm?' '+nm.textContent:''));
+      }
+      const eye=el.querySelector('.eye');
+      if(eye&&!eye.hasAttribute('tabindex')){
+        eye.setAttribute('tabindex','0');eye.setAttribute('role','button');
+        eye.setAttribute('aria-label','Toggle layer visibility');
+      }
+    });
+    document.querySelectorAll('#laySwatches i').forEach((sw,i)=>{
+      if(!sw.hasAttribute('tabindex')){
+        sw.setAttribute('tabindex','0');sw.setAttribute('role','button');
+        sw.setAttribute('aria-label','Set layer color '+(i+1));
+      }
+    });
+  }
+  a11yDecorate();
+  const llist=document.getElementById('layerList');
+  if(llist)new MutationObserver(a11yDecorate).observe(llist,{childList:true});
+  const swl=document.getElementById('laySwatches');
+  if(swl)new MutationObserver(a11yDecorate).observe(swl,{childList:true});
+  document.addEventListener('keydown',e=>{
+    if((e.key==='Enter'||e.key===' ')&&e.target instanceof Element&&
+       e.target.tagName!=='BUTTON'&&e.target.getAttribute('role')==='button'){
+      e.preventDefault();e.target.click();
+    }
+  });
+
+  /* Collapsible right-panel sections: the header buttons toggle .collapsed
+     and keep aria-expanded in sync (the legacy h3 click handler ignores
+     clicks that land on buttons, so no double toggle). */
+  document.querySelectorAll('.sec').forEach(sec=>{
+    const h=sec.querySelector('h3'),btn=sec.querySelector('.sec-toggle');
+    if(!h||!btn)return;
+    const sync=()=>btn.setAttribute('aria-expanded',String(!sec.classList.contains('collapsed')));
+    btn.addEventListener('click',()=>{sec.classList.toggle('collapsed');sync();});
+    h.addEventListener('click',sync); // padding clicks still hit the legacy toggle
+    sync();
+  });
+
+  /* Responsive drawer: ≤1000px the right panel slides in over the canvas. */
+  const pBtn=document.getElementById('btnPanel');
+  if(pBtn)pBtn.addEventListener('click',()=>{
+    const open=document.body.classList.toggle('panel-open');
+    pBtn.setAttribute('aria-expanded',String(open));
+  });
+
+  /* First-run coach overlay — shows once, dismissed by button or Escape. */
+  try{
+    if(!localStorage.getItem('mkf_tour_done')){
+      const ov=document.getElementById('tourOverlay');
+      const okBtn=document.getElementById('tourDone');
+      if(ov&&okBtn){
+        ov.style.display='flex';
+        const done=()=>{
+          ov.style.display='none';
+          try{localStorage.setItem('mkf_tour_done','1');}catch(_){}
+          window.removeEventListener('keydown',onEsc,true);
+        };
+        const onEsc=e=>{if(e.key==='Escape'){e.stopPropagation();e.preventDefault();done();}};
+        window.addEventListener('keydown',onEsc,true);
+        okBtn.addEventListener('click',done);
+        okBtn.focus();
+      }
+    }
+  }catch(_){/* localStorage unavailable — skip the tour */}
+})();
 </script>
 </body>
 </html>

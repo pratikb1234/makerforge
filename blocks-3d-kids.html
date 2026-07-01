@@ -4,11 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BlockBuddy · Build in 3D! 🧊</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
   :root{--bg:#eaf4ff;--panel:#fff;--ink:#22314a;--mut:#7d8aa3;--line:#dce7f5;
     --a:#3fa9ff;--b:#ff7aa8;--c:#5ad197;--d:#ffca3a;--e:#a06bff;
     --shadow:0 5px 0 rgba(34,49,74,.12);--shadow2:0 12px 34px rgba(34,49,74,.22)}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* token remap must live on body: [data-theme="kids"] is set there, and var()
+     inside a custom property resolves where it is DECLARED (on :root it would
+     grab the dark-theme fallbacks). --tk-mut fixes the old 3.4:1 grey. */
+  body{--bg:var(--tk-bg);--panel:var(--tk-panel);--ink:var(--tk-text);--mut:var(--tk-mut);--line:var(--tk-line);
+    --focus-ring:0 0 0 2px var(--bg),0 0 0 4px var(--tk-focus)}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
     font-family:"Baloo 2","Comic Sans MS","Segoe UI Rounded",-apple-system,sans-serif;font-weight:700;font-size:15px;-webkit-user-select:none;user-select:none}
   .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
@@ -18,14 +24,14 @@
   .kbtn{border:3px solid var(--line);border-radius:16px;padding:9px 14px;background:#fff;color:var(--ink);font-family:inherit;font-weight:800;font-size:15px;cursor:pointer;box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:7px;transition:transform .08s}
   .kbtn:hover{transform:translateY(-2px)}.kbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(34,49,74,.12)}
   .kbtn.round{width:50px;height:50px;justify-content:center;padding:0;font-size:22px}
-  .kbtn.on{background:var(--a);border-color:var(--a);color:#fff}
+  .kbtn.on{background:var(--a);border-color:var(--a);color:var(--ink)}
   .kbtn.big{font-size:17px;padding:11px 18px}
   .kbtn.grp{background:linear-gradient(180deg,#7be0a6,#4fc98a);border-color:#38b073;color:#053a22}
   .kbtn.exp{background:linear-gradient(180deg,#ffd75e,#ffbe2e);border-color:#eaa100;color:#5a3d00}
   .sp{flex:1}
   .main{display:grid;grid-template-columns:1fr 132px;min-height:0}
   .stage{position:relative;background:radial-gradient(circle at 50% 30%,#ffffff,#dcebfb)}
-  #gl{position:absolute;inset:0;display:block;width:100%;height:100%}
+  #gl{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none}
   .hintbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#fff;border:3px solid var(--line);border-radius:20px;padding:8px 18px;box-shadow:var(--shadow);font-size:15px;pointer-events:none;max-width:80%;text-align:center}
   .vbar{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;background:#fff;border:3px solid var(--line);border-radius:16px;padding:6px;box-shadow:var(--shadow)}
   .vbar .kbtn{box-shadow:none;border-width:2px;padding:7px 10px}
@@ -45,45 +51,73 @@
   .card input[type=number]{width:100%;border:3px solid var(--line);border-radius:11px;padding:6px 8px;font-family:inherit;font-weight:700;font-size:13px}
   .seg{display:flex;gap:6px;margin:6px 0}
   .seg button{flex:1;border:3px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font-family:inherit;font-weight:800;cursor:pointer;font-size:13px}
-  .seg button.on{background:var(--a);border-color:var(--a);color:#fff}
-  .seg button.hole.on{background:#8894a8;border-color:#8894a8}
+  .seg button.on{background:var(--a);border-color:var(--a);color:var(--ink)}
+  .seg button.hole.on{background:var(--tk-mut);border-color:var(--tk-mut);color:#fff}
   .sw{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
-  .sw i{width:22px;height:22px;border-radius:7px;cursor:pointer;border:3px solid transparent}
+  .sw i{width:var(--tap-min);height:var(--tap-min);border-radius:10px;cursor:pointer;border:3px solid transparent}
   .sw i.on{border-color:#22314a}
   .bottom{display:flex;align-items:center;gap:14px;padding:7px 14px;background:var(--panel);border-top:3px solid var(--line);color:var(--mut);font-size:13px}
   .bottom b{color:var(--ink)}
   .toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%) scale(.85);background:#fff;border:4px solid var(--d);border-radius:22px;padding:12px 22px;box-shadow:var(--shadow2);font-size:18px;font-weight:800;z-index:80;opacity:0;transition:.22s;pointer-events:none}
   .toast.show{opacity:1;transform:translateX(-50%) scale(1)}
   ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+
+  /* ===== A11y & responsive pass (tokens) ===== */
+  .kbtn,.shape,.seg button{min-width:var(--tap-min);min-height:var(--tap-min)}
+  .pal>*{flex-shrink:0} /* scroll, don't squash card labels */
+  .card input[type=number]{min-height:var(--tap-min)}
+
+  /* first-run guided tour */
+  .tour{position:fixed;inset:0;background:rgba(34,49,74,.5);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+  .tour.show{display:flex}
+  .tourbox{background:#fff;border:5px solid var(--d);border-radius:26px;padding:24px;width:min(560px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow2);text-align:center}
+  .tourbox h2{margin:0 0 14px;font-size:26px}
+  .tsteps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:6px 0 16px}
+  .tstep{flex:1 1 140px;background:var(--bg);border:3px solid var(--line);border-radius:18px;padding:14px 10px}
+  .tstep .tbig{font-size:42px;line-height:1.2}
+  .tstep .cap{font-size:15px;font-weight:800;margin-top:6px}
+  .tstep .num{display:inline-block;background:var(--d);border-radius:999px;min-width:26px;height:26px;line-height:26px;font-weight:800;margin-bottom:6px}
+  .kbtn.go{background:linear-gradient(180deg,#ffd75e,#ffbe2e);border-color:#eaa100;color:#5a3d00;font-size:18px;padding:12px 24px}
+
+  /* small screens / touch: shape tray becomes a horizontal bottom bar */
+  @media (max-width:900px){
+    .main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+    .stage{grid-row:1}
+    .pal{grid-row:2;flex-direction:row;align-items:stretch;overflow-x:auto;overflow-y:hidden;border-left:none;border-top:3px solid var(--line);padding:8px 10px}
+    .pal .t{align-self:center;margin:0 2px;white-space:nowrap}
+    .shape{flex:0 0 auto}
+    .card{right:12px}
+    .vbar{flex-wrap:wrap;max-width:calc(100% - 24px)}
+  }
 </style>
 </head>
-<body>
+<body data-theme="kids">
 <div class="app">
   <div class="top">
     <div class="logo">🧊 <b>BlockBuddy</b></div>
-    <button class="kbtn round" id="bNew" title="Start over">📄</button>
-    <button class="kbtn round" id="bUndo" title="Oops">↩️</button>
-    <button class="kbtn round" id="bRedo" title="Again">↪️</button>
-    <button class="kbtn round" id="bCopy" title="Twin">👯</button>
-    <button class="kbtn round" id="bDel" title="Remove">🗑️</button>
-    <button class="kbtn big grp" id="bGroup">🧲 Group</button>
-    <button class="kbtn big" id="bUngroup">✂️ Ungroup</button>
+    <button class="kbtn round" id="bNew" title="Start over" aria-label="Start again">📄</button>
+    <button class="kbtn round" id="bUndo" title="Oops" aria-label="Undo">↩️</button>
+    <button class="kbtn round" id="bRedo" title="Again" aria-label="Redo">↪️</button>
+    <button class="kbtn round" id="bCopy" title="Twin" aria-label="Copy shape">👯</button>
+    <button class="kbtn round" id="bDel" title="Remove" aria-label="Delete shape">🗑️</button>
+    <button class="kbtn big grp" id="bGroup" aria-label="Group — glue shapes together">🧲 Group</button>
+    <button class="kbtn big" id="bUngroup" aria-label="Ungroup — take shapes apart">✂️ Ungroup</button>
     <div class="sp"></div>
-    <button class="kbtn round" id="bHelp" title="How to build">❓</button>
-    <button class="kbtn big exp" id="bExport">⬇ Save 3D file</button>
+    <button class="kbtn round" id="bHelp" title="How to build" aria-label="Help">❓</button>
+    <button class="kbtn big exp" id="bExport" aria-label="Save 3D file">⬇ Save 3D file</button>
   </div>
 
   <div class="main">
     <div class="stage" id="stage">
-      <canvas id="gl"></canvas>
-      <div class="hintbar" id="hint">👉 Tap a shape to add it. Then drag it around!</div>
+      <canvas id="gl" role="img" aria-label="3D building space. Your shapes show up here."></canvas>
+      <div class="hintbar" id="hint" role="status" aria-live="polite">👉 Tap a shape to add it. Then drag it around!</div>
       <div class="vbar">
-        <button class="kbtn" id="vFit">🔍 Fit</button>
-        <button class="kbtn" id="vUp">⬆️ Up</button>
-        <button class="kbtn" id="vDown">⬇️ Down</button>
-        <button class="kbtn" id="vRot">🔄 Turn</button>
-        <button class="kbtn" id="vBig">➕ Bigger</button>
-        <button class="kbtn" id="vSmall">➖ Smaller</button>
+        <button class="kbtn" id="vFit" aria-label="See everything">🔍 Fit</button>
+        <button class="kbtn" id="vUp" aria-label="Move shape up">⬆️ Up</button>
+        <button class="kbtn" id="vDown" aria-label="Move shape down">⬇️ Down</button>
+        <button class="kbtn" id="vRot" aria-label="Turn shape">🔄 Turn</button>
+        <button class="kbtn" id="vBig" aria-label="Make it bigger">➕ Bigger</button>
+        <button class="kbtn" id="vSmall" aria-label="Make it smaller">➖ Smaller</button>
       </div>
       <!-- property card -->
       <div class="card" id="card">
@@ -98,16 +132,16 @@
 
     <div class="pal" id="pal">
       <div class="t">Solid</div>
-      <div class="shape" data-shape="box" data-hole="0"><div class="ic">🟦</div><div class="nm">Box</div></div>
-      <div class="shape" data-shape="cylinder" data-hole="0"><div class="ic">🥫</div><div class="nm">Cylinder</div></div>
-      <div class="shape" data-shape="sphere" data-hole="0"><div class="ic">🔵</div><div class="nm">Ball</div></div>
-      <div class="shape" data-shape="cone" data-hole="0"><div class="ic">🔺</div><div class="nm">Cone</div></div>
-      <div class="shape" data-shape="pyramid" data-hole="0"><div class="ic">🔻</div><div class="nm">Pyramid</div></div>
-      <div class="shape" data-shape="roof" data-hole="0"><div class="ic">🏠</div><div class="nm">Roof</div></div>
-      <div class="shape" data-shape="torus" data-hole="0"><div class="ic">🍩</div><div class="nm">Donut</div></div>
+      <div class="shape" data-shape="box" data-hole="0" role="button" tabindex="0" aria-label="Add a box"><div class="ic">🟦</div><div class="nm">Box</div></div>
+      <div class="shape" data-shape="cylinder" data-hole="0" role="button" tabindex="0" aria-label="Add a cylinder"><div class="ic">🥫</div><div class="nm">Cylinder</div></div>
+      <div class="shape" data-shape="sphere" data-hole="0" role="button" tabindex="0" aria-label="Add a ball"><div class="ic">🔵</div><div class="nm">Ball</div></div>
+      <div class="shape" data-shape="cone" data-hole="0" role="button" tabindex="0" aria-label="Add a cone"><div class="ic">🔺</div><div class="nm">Cone</div></div>
+      <div class="shape" data-shape="pyramid" data-hole="0" role="button" tabindex="0" aria-label="Add a pyramid"><div class="ic">🔻</div><div class="nm">Pyramid</div></div>
+      <div class="shape" data-shape="roof" data-hole="0" role="button" tabindex="0" aria-label="Add a roof"><div class="ic">🏠</div><div class="nm">Roof</div></div>
+      <div class="shape" data-shape="torus" data-hole="0" role="button" tabindex="0" aria-label="Add a donut"><div class="ic">🍩</div><div class="nm">Donut</div></div>
       <div class="t">Hole</div>
-      <div class="shape hole" data-shape="box" data-hole="1"><div class="ic">⬜</div><div class="nm">Box hole</div></div>
-      <div class="shape hole" data-shape="cylinder" data-hole="1"><div class="ic">⭕</div><div class="nm">Round hole</div></div>
+      <div class="shape hole" data-shape="box" data-hole="1" role="button" tabindex="0" aria-label="Add a box hole"><div class="ic">⬜</div><div class="nm">Box hole</div></div>
+      <div class="shape hole" data-shape="cylinder" data-hole="1" role="button" tabindex="0" aria-label="Add a round hole"><div class="ic">⭕</div><div class="nm">Round hole</div></div>
     </div>
   </div>
 
@@ -119,8 +153,21 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileIn" accept=".json,.bbud" style="display:none">
+
+<!-- first-run guided tour -->
+<div class="tour" id="tour" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <div class="tourbox">
+    <h2 id="tourTitle">Hi! Let's build in 3D! 🧊</h2>
+    <div class="tsteps">
+      <div class="tstep"><span class="num">1</span><div class="tbig">🟦</div><div class="cap">Tap a shape</div></div>
+      <div class="tstep"><span class="num">2</span><div class="tbig">✋</div><div class="cap">Drag to move</div></div>
+      <div class="tstep"><span class="num">3</span><div class="tbig">🧲</div><div class="cap">Group to glue</div></div>
+    </div>
+    <button class="kbtn go" id="tourGo" autofocus>Let's go! 🚀</button>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -294,7 +341,7 @@ function setHole(h){const ids=[...APP.sel];if(ids.length!==1)return;const o=APP.
 $('#bExport').onclick=()=>{const tris=[];bodyGroup.children.forEach(m=>{if(!m.geometry||m.userData.id==null)return;const o=APP.objs.find(x=>x.id===m.userData.id);if(o&&o.hole)return;const pos=m.geometry.attributes.position.array;for(let i=0;i<pos.length;i+=9)tris.push([pos[i],pos[i+1],pos[i+2],pos[i+3],pos[i+4],pos[i+5],pos[i+6],pos[i+7],pos[i+8]]);});
   if(!tris.length){toast('Build something first! 🧱');return;}
   const n=tris.length,buf=new ArrayBuffer(84+n*50),dv=new DataView(buf);dv.setUint32(80,n,true);let of=84;for(const t of tris){const nx=triN(t);dv.setFloat32(of,nx[0],true);dv.setFloat32(of+4,nx[1],true);dv.setFloat32(of+8,nx[2],true);of+=12;for(let i=0;i<9;i++){dv.setFloat32(of,t[i],true);of+=4;}dv.setUint16(of,0,true);of+=2;}
-  download('my-model.stl',buf,'application/octet-stream');toast('⬇ Saved my-model.stl! 🎉');confetti();};
+  download('my-model.stl',buf,'application/octet-stream');toast('⬇ Saved my-model.stl! 🎉');if(!matchMedia('(prefers-reduced-motion: reduce)').matches)confetti();};
 function triN(t){const ax=t[3]-t[0],ay=t[4]-t[1],az=t[5]-t[2],bx=t[6]-t[0],by=t[7]-t[1],bz=t[8]-t[2];let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;const l=Math.hypot(nx,ny,nz)||1;return[nx/l,ny/l,nz/l];}
 function download(name,data,mime){const b=new Blob([data],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
 
@@ -320,6 +367,26 @@ function boot(){initThree();
   setTimeout(onResize,60);
 }
 boot();
+
+/* ---------- accessibility & first-run tour (additive — no logic changes above) ---------- */
+/* keyboard activation for role="button" cards (.shape) */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' '&&e.key!=='Spacebar')return;
+  const el=e.target&&e.target.closest&&e.target.closest('.shape');
+  if(el){e.preventDefault();el.click();}
+});
+/* first-run guided overlay (re-opened by the ❓ Help button) */
+(function(){
+  const tour=document.getElementById('tour'),go=document.getElementById('tourGo');
+  function openTour(){tour.classList.add('show');go.focus();}
+  function closeTour(){tour.classList.remove('show');try{localStorage.setItem('blockbuddy_tour_done','1');}catch(_){}}
+  go.addEventListener('click',closeTour);
+  tour.addEventListener('click',e=>{if(e.target===tour)closeTour();});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&tour.classList.contains('show'))closeTour();});
+  document.getElementById('bHelp').addEventListener('click',openTour);
+  let seen=null;try{seen=localStorage.getItem('blockbuddy_tour_done');}catch(_){}
+  if(!seen)openTour();
+})();
 </script>
 </body>
 </html>

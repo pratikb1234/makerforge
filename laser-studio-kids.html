@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zappy · Make &amp; Cut! 🚀</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
   :root{
     --bg:#fff7ec; --bg2:#fff;
@@ -17,6 +18,10 @@
     --shadow2:0 10px 30px rgba(43,35,80,.18);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* token remap must live on body: [data-theme="kids"] is set there, and var()
+     inside a custom property resolves where it is DECLARED (on :root it would
+     grab the dark-theme fallbacks). --tk-mut fixes the old 3.4:1 grey. */
+  body{--mut:var(--tk-mut);--focus-ring:0 0 0 2px var(--bg),0 0 0 4px var(--tk-focus)}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
     font-family:"Baloo 2","Comic Sans MS","Segoe UI Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     font-size:16px;-webkit-user-select:none;user-select:none;font-weight:700}
@@ -38,7 +43,7 @@
   .kbtn .lbl{font-size:12px;color:var(--mut);font-weight:800}
 
   /* ===== Main ===== */
-  .main{display:grid;grid-template-columns:120px 1fr 190px;min-height:0}
+  .main{display:grid;grid-template-columns:120px 1fr 200px;min-height:0}
   .rail{background:var(--bg2);border-right:3px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 8px;overflow-y:auto}
   .rail .title{font-size:13px;color:var(--mut);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin:2px 0}
   .shape{width:96px;border:3px solid var(--line);background:#fff;border-radius:20px;padding:10px 4px 8px;cursor:pointer;
@@ -115,22 +120,49 @@
   .gset .grp h4{margin:0 0 8px;font-size:14px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
   ::-webkit-scrollbar{width:12px}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:3px solid var(--bg2)}
+  /* ===== A11y & responsive pass (tokens) ===== */
+  .kbtn,.shape,.job,.chk{min-width:var(--tap-min);min-height:var(--tap-min)}
+  .rail>*,.side .job{flex-shrink:0} /* scroll, don't squash card labels */
+  .gset input,.gset select{min-height:var(--tap-min)}
+  .time .big{font-size:19px;overflow-wrap:break-word}
+
+  /* first-run guided tour */
+  .tour{position:fixed;inset:0;background:rgba(43,35,80,.5);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+  .tour.show{display:flex}
+  .tourbox{background:#fff;border:5px solid var(--sun);border-radius:28px;padding:26px;width:min(560px,94vw);max-height:90vh;overflow:auto;box-shadow:var(--shadow2);text-align:center}
+  .tourbox h2{margin:0 0 14px;font-size:28px}
+  .tsteps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:6px 0 18px}
+  .tstep{flex:1 1 140px;background:var(--bg);border:3px solid var(--line);border-radius:20px;padding:14px 10px}
+  .tstep .tbig{font-size:44px;line-height:1.2}
+  .tstep .cap{font-size:16px;font-weight:800;margin-top:6px}
+  .tstep .num{display:inline-block;background:var(--sun);border-radius:999px;min-width:28px;height:28px;line-height:28px;font-weight:800;margin-bottom:6px}
+
+  /* small screens / touch: rail becomes a horizontal bottom bar */
+  @media (max-width:900px){
+    .top{flex-wrap:wrap}
+    .main{grid-template-columns:1fr 170px;grid-template-rows:minmax(0,1fr) auto}
+    .canvasbox{grid-column:1;grid-row:1}
+    .side{grid-column:2;grid-row:1}
+    .rail{grid-column:1 / -1;grid-row:2;flex-direction:row;align-items:stretch;overflow-x:auto;overflow-y:hidden;border-right:none;border-top:3px solid var(--line);padding:8px 10px}
+    .rail .title{align-self:center;margin:0 2px;white-space:nowrap}
+    .shape{flex:0 0 auto;width:auto;min-width:84px}
+  }
 </style>
 </head>
-<body>
+<body data-theme="kids">
 <div class="app">
   <!-- TOP -->
   <div class="top">
     <div class="logo"><span class="rocket">🚀</span> <b>Zappy</b></div>
-    <button class="kbtn round" id="bNew" title="Start fresh">📄</button>
-    <button class="kbtn round" id="bUndo" title="Oops! (undo)">↩️</button>
-    <button class="kbtn round" id="bRedo" title="Again (redo)">↪️</button>
-    <button class="kbtn round" id="bCopy" title="Make a twin">👯</button>
-    <button class="kbtn round" id="bDel" title="Throw away">🗑️</button>
+    <button class="kbtn round" id="bNew" title="Start fresh" aria-label="Start again">📄</button>
+    <button class="kbtn round" id="bUndo" title="Oops! (undo)" aria-label="Undo">↩️</button>
+    <button class="kbtn round" id="bRedo" title="Again (redo)" aria-label="Redo">↪️</button>
+    <button class="kbtn round" id="bCopy" title="Make a twin" aria-label="Copy shape">👯</button>
+    <button class="kbtn round" id="bDel" title="Throw away" aria-label="Delete shape">🗑️</button>
     <div class="spacer"></div>
-    <button class="kbtn round" id="bHelp" title="How to play">❓</button>
-    <button class="kbtn round" id="bGear" title="Grown-up settings">⚙️</button>
-    <button class="kbtn make" id="bMake">⚡ Make it!</button>
+    <button class="kbtn round" id="bHelp" title="How to play" aria-label="Help">❓</button>
+    <button class="kbtn round" id="bGear" title="Grown-up settings" aria-label="Grown-up settings">⚙️</button>
+    <button class="kbtn make" id="bMake" aria-label="Make it!">⚡ Make it!</button>
   </div>
 
   <!-- MAIN -->
@@ -138,36 +170,36 @@
     <!-- SHAPES RAIL -->
     <div class="rail" id="rail">
       <div class="title">Move</div>
-      <div class="shape active" data-tool="select"><div class="ic">✋</div><div class="nm">Move</div></div>
+      <div class="shape active" data-tool="select" role="button" tabindex="0" aria-label="Move tool"><div class="ic">✋</div><div class="nm">Move</div></div>
       <div class="title">Shapes</div>
-      <div class="shape" data-tool="rect"><div class="ic">🟦</div><div class="nm">Square</div></div>
-      <div class="shape" data-tool="ellipse"><div class="ic">🔵</div><div class="nm">Circle</div></div>
-      <div class="shape" data-tool="tri"><div class="ic">🔺</div><div class="nm">Triangle</div></div>
-      <div class="shape" data-tool="star"><div class="ic">⭐</div><div class="nm">Star</div></div>
-      <div class="shape" data-tool="heart"><div class="ic">❤️</div><div class="nm">Heart</div></div>
+      <div class="shape" data-tool="rect" role="button" tabindex="0" aria-label="Square shape"><div class="ic">🟦</div><div class="nm">Square</div></div>
+      <div class="shape" data-tool="ellipse" role="button" tabindex="0" aria-label="Circle shape"><div class="ic">🔵</div><div class="nm">Circle</div></div>
+      <div class="shape" data-tool="tri" role="button" tabindex="0" aria-label="Triangle shape"><div class="ic">🔺</div><div class="nm">Triangle</div></div>
+      <div class="shape" data-tool="star" role="button" tabindex="0" aria-label="Star shape"><div class="ic">⭐</div><div class="nm">Star</div></div>
+      <div class="shape" data-tool="heart" role="button" tabindex="0" aria-label="Heart shape"><div class="ic">❤️</div><div class="nm">Heart</div></div>
       <div class="title">Lines</div>
-      <div class="shape" data-tool="line"><div class="ic">➖</div><div class="nm">Line</div></div>
-      <div class="shape" data-tool="pen"><div class="ic">✏️</div><div class="nm">Doodle</div></div>
-      <div class="shape" data-tool="text"><div class="ic">🔤</div><div class="nm">Word</div></div>
+      <div class="shape" data-tool="line" role="button" tabindex="0" aria-label="Line"><div class="ic">➖</div><div class="nm">Line</div></div>
+      <div class="shape" data-tool="pen" role="button" tabindex="0" aria-label="Doodle pen"><div class="ic">✏️</div><div class="nm">Doodle</div></div>
+      <div class="shape" data-tool="text" role="button" tabindex="0" aria-label="Add a word"><div class="ic">🔤</div><div class="nm">Word</div></div>
     </div>
 
     <!-- CANVAS -->
     <div class="canvasbox" id="cbox">
-      <canvas id="stage"></canvas>
-      <div class="helper" id="helper">👋 Tap a shape, then tap the paper!</div>
+      <canvas id="stage" role="img" aria-label="Drawing paper. Your shapes show up here."></canvas>
+      <div class="helper" id="helper" role="status" aria-live="polite">👋 Tap a shape, then tap the paper!</div>
       <div class="zoom">
-        <button class="kbtn" id="zOut">➖</button>
-        <button class="kbtn" id="zFit" title="See it all">🔍</button>
-        <button class="kbtn" id="zIn">➕</button>
+        <button class="kbtn" id="zOut" aria-label="Zoom out">➖</button>
+        <button class="kbtn" id="zFit" title="See it all" aria-label="See everything">🔍</button>
+        <button class="kbtn" id="zIn" aria-label="Zoom in">➕</button>
       </div>
     </div>
 
     <!-- JOB PICKER -->
     <div class="side">
       <div class="h">What should<br>the laser do?</div>
-      <div class="job cut on" data-job="0"><span class="dot"></span><div class="je">✂️</div><div class="jt">Cut out</div><div class="jd">Cut all the way through</div></div>
-      <div class="job draw" data-job="2"><span class="dot"></span><div class="je">🖊️</div><div class="jt">Draw line</div><div class="jd">A light line, no cut</div></div>
-      <div class="job color" data-job="1"><span class="dot"></span><div class="je">🖍️</div><div class="jt">Color in</div><div class="jd">Shade the whole shape</div></div>
+      <div class="job cut on" data-job="0" role="button" tabindex="0" aria-label="Cut out — cut all the way through"><span class="dot"></span><div class="je">✂️</div><div class="jt">Cut out</div><div class="jd">Cut all the way through</div></div>
+      <div class="job draw" data-job="2" role="button" tabindex="0" aria-label="Draw line — a light line, no cut"><span class="dot"></span><div class="je">🖊️</div><div class="jt">Draw line</div><div class="jd">A light line, no cut</div></div>
+      <div class="job color" data-job="1" role="button" tabindex="0" aria-label="Color in — shade the whole shape"><span class="dot"></span><div class="je">🖍️</div><div class="jt">Color in</div><div class="jd">Shade the whole shape</div></div>
 
       <div class="time">
         <div class="clock">⏱️</div>
@@ -186,9 +218,22 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="mbg" id="mbg"><div class="modal" id="modal"></div></div>
 <input type="file" id="fileIn" accept=".svg,.mkf,.json" style="display:none">
+
+<!-- first-run guided tour -->
+<div class="tour" id="tour" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <div class="tourbox">
+    <h2 id="tourTitle">Hi! Let's make something! 🚀</h2>
+    <div class="tsteps">
+      <div class="tstep"><span class="num">1</span><div class="tbig">🟦</div><div class="cap">Tap a shape</div></div>
+      <div class="tstep"><span class="num">2</span><div class="tbig">👇📄</div><div class="cap">Tap the paper</div></div>
+      <div class="tstep"><span class="num">3</span><div class="tbig">⚡</div><div class="cap">Press Make it!</div></div>
+    </div>
+    <button class="kbtn make" id="tourGo" autofocus>Let's go! 🚀</button>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -572,7 +617,7 @@ window.closeModal=closeModal;
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1500);}
 const cheers=['Nice! 🎉','Yay! ⭐','Cool! 😎','Awesome! 🚀','Great! 👍','Wow! ✨'];
 function cheer(){toast(cheers[Math.floor(Math.random()*cheers.length)]);}
-function bigCheer(){toast('🎉 Ta-da! You made it! 🎉');confetti();}
+function bigCheer(){toast('🎉 Ta-da! You made it! 🎉');if(!matchMedia('(prefers-reduced-motion: reduce)').matches)confetti();}
 function bounce(el){el.animate([{transform:'scale(1)'},{transform:'scale(1.06)'},{transform:'scale(1)'}],{duration:400});}
 function confetti(){const n=60;for(let i=0;i<n;i++){const d=document.createElement('div');d.textContent=['🎉','⭐','✨','❤️','🟦','🔺'][i%6];d.style.cssText=`position:fixed;left:${Math.random()*100}vw;top:-40px;font-size:${18+Math.random()*18}px;z-index:120;pointer-events:none`;document.body.appendChild(d);const dur=1800+Math.random()*1400;d.animate([{transform:'translateY(0) rotate(0)',opacity:1},{transform:`translateY(105vh) rotate(${(Math.random()*720-360)}deg)`,opacity:.9}],{duration:dur,easing:'ease-in'});setTimeout(()=>d.remove(),dur);}}
 
@@ -589,6 +634,26 @@ function resetJobUI(){document.querySelectorAll('.job').forEach(x=>x.classList.t
 function seed(){const r=makeShape('rect',40,40,90,60);r.rad=10;r.layer=S.layers[0].id;const h=makeShape('heart',55,52,40,36);h.layer=S.layers[1].id;S.objects.push(r,h);}
 function boot(){S.layers=defaultLayers();seed();resetJobUI();resize();fit();sync();commit(serialize());window.addEventListener('resize',resize);setTimeout(()=>setHelper('👋 Tap a shape on the left, then tap the paper!'),100);}
 boot();
+
+/* ---------- accessibility & first-run tour (additive — no logic changes above) ---------- */
+/* keyboard activation for role="button" cards (.shape / .job) */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' '&&e.key!=='Spacebar')return;
+  const el=e.target&&e.target.closest&&e.target.closest('.shape,.job');
+  if(el){e.preventDefault();el.click();}
+});
+/* first-run guided overlay (re-opened by the ❓ Help button) */
+(function(){
+  const tour=document.getElementById('tour'),go=document.getElementById('tourGo');
+  function openTour(){tour.classList.add('show');go.focus();}
+  function closeTour(){tour.classList.remove('show');try{localStorage.setItem('zappy_tour_done','1');}catch(_){}}
+  go.addEventListener('click',closeTour);
+  tour.addEventListener('click',e=>{if(e.target===tour)closeTour();});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&tour.classList.contains('show'))closeTour();});
+  document.getElementById('bHelp').addEventListener('click',openTour);
+  let seen=null;try{seen=localStorage.getItem('zappy_tour_done');}catch(_){}
+  if(!seen)openTour();
+})();
 </script>
 </body>
 </html>

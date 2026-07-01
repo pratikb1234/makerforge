@@ -1,0 +1,93 @@
+/* ============================================================
+   MakerForge design tokens — one token system, two themes.
+   Adult tools (laser-studio, cad-studio, cad-brep, launcher):
+     <body data-theme="dark">  — dark technical
+   Kids tools (laser-studio-kids "Zappy", blocks-3d "BlockBuddy"):
+     <body data-theme="kids">  — light playful
+   All colors meet WCAG 2.1 AA (≥4.5:1 for text, ≥3:1 for UI parts)
+   against the surfaces they are specified for.
+   ============================================================ */
+
+:root {
+  /* ---- spacing scale (px) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* ---- radius ---- */
+  --rad-s: 6px; --rad-m: 10px; --rad-l: 16px; --rad-pill: 999px;
+
+  /* ---- typography ---- */
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-kids: "Baloo 2", "Comic Sans MS", ui-rounded, var(--font-ui);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-xs: 11px; --fs-s: 12.5px; --fs-m: 14px; --fs-l: 16px; --fs-xl: 20px;
+
+  /* ---- interaction ---- */
+  --tap-min: 44px;              /* WCAG 2.5.5 minimum target */
+  --focus-ring: 0 0 0 2px var(--tk-bg), 0 0 0 4px var(--tk-focus);
+  --transition-fast: 120ms ease;
+}
+
+/* ---------------- dark technical theme ---------------- */
+[data-theme="dark"], :root {
+  --tk-bg: #12151a;             /* app background */
+  --tk-panel: #191d24;          /* panels / toolbars */
+  --tk-panel-2: #20252e;        /* raised surfaces, inputs */
+  --tk-line: #2b323d;           /* hairline borders */
+  --tk-line-2: #3a434f;         /* stronger borders */
+  --tk-text: #e8edf3;           /* primary text  (14.5:1 on panel) */
+  --tk-mut: #9aa6b5;            /* secondary text (6.9:1 on panel — AA) */
+  --tk-acc: #f0803c;            /* brand accent (large text / UI parts) */
+  --tk-acc-2: #d96a28;
+  --tk-blue: #6db1ff;           /* links & info (6.5:1 on panel) */
+  --tk-ok: #3ecf8e;
+  --tk-warn: #ffb454;
+  --tk-danger: #ff5f6d;
+  --tk-focus: #8ec2ff;          /* focus ring — 3:1+ against panels */
+  --tk-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+
+/* ---------------- light playful (kids) theme ---------------- */
+[data-theme="kids"] {
+  --tk-bg: #eaf4ff;
+  --tk-panel: #ffffff;
+  --tk-panel-2: #f2f7ff;
+  --tk-line: #dce7f5;
+  --tk-line-2: #b9cbe4;
+  --tk-text: #22314a;           /* 12.6:1 on white */
+  --tk-mut: #55647f;            /* 6.1:1 on white — AA (was #7d8aa3, 3.4:1 ✗) */
+  --tk-acc: #e94f77;            /* deepened from #ff7aa8 for contrast */
+  --tk-acc-2: #2e8fe0;          /* deepened from #3fa9ff */
+  --tk-blue: #2e8fe0;
+  --tk-ok: #1f9e63;             /* deepened from #5ad197 */
+  --tk-warn: #b97a00;           /* deepened from #ffca3a for text use */
+  --tk-danger: #d63c4e;
+  --tk-focus: #7746d1;          /* purple ring, 4.9:1 on #eaf4ff */
+  --tk-shadow: 0 12px 34px rgba(43,35,80,.16);
+}
+
+/* ---------------- shared behaviors ---------------- */
+
+/* Visible keyboard focus everywhere; never remove, only style. */
+:where(button, [role="button"], a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--rad-s);
+}
+
+/* Screen-reader-only utility */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Reduced motion: kill decorative animation & smooth transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

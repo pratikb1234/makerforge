@@ -4,8 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MakerForge · B-Rep CAD (OpenCascade)</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
-  :root{--bg:#12151a;--panel:#191d24;--panel2:#20252e;--line:#2b323d;--line2:#3a434f;--txt:#e8edf3;--mut:#8b96a5;--acc:#f0803c;--acc2:#d96a28;--blue:#4c9ffe;--ok:#3ecf8e;--danger:#ff5f6d}
+  /* Palette remapped onto shared --tk-* tokens (tokens.css); old names kept working.
+     Fallbacks preserve the original dark palette if tokens.css fails to load. */
+  :root{--bg:var(--tk-bg,#12151a);--panel:var(--tk-panel,#191d24);--panel2:var(--tk-panel-2,#20252e);--line:var(--tk-line,#2b323d);--line2:var(--tk-line-2,#3a434f);--txt:var(--tk-text,#e8edf3);--mut:var(--tk-mut,#9aa6b5);--acc:var(--tk-acc,#f0803c);--acc2:var(--tk-acc-2,#d96a28);--blue:var(--tk-blue,#6db1ff);--ok:var(--tk-ok,#3ecf8e);--danger:var(--tk-danger,#ff5f6d)}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
   .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
@@ -24,15 +27,19 @@
   .btn:hover{background:#2a323d;border-color:#4c5866}.btn:active{transform:translateY(1px)}
   .btn:disabled{opacity:.4;cursor:not-allowed}
   .btn.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));border-color:var(--acc2);color:#231103;font-weight:700}
-  .btn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn.on{background:var(--blue);border-color:var(--blue);color:#0b2239}
   .main{display:grid;grid-template-columns:230px 1fr 240px;min-height:0}
+  /* responsive: sidebars get narrower but stay scrollable ≤1000px */
+  @media(max-width:1000px){.main{grid-template-columns:170px 1fr 190px}}
+  @media(max-width:720px){.main{grid-template-columns:140px 1fr 160px}}
   .side{background:var(--panel);overflow-y:auto}
   .side.l{border-right:1px solid var(--line)} .side.r{border-left:1px solid var(--line)}
   .sec{border-bottom:1px solid var(--line)}
   .sec h3{margin:0;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)}
   .body{padding:8px 10px;display:flex;flex-direction:column;gap:7px}
   .item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
-  .item.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .item:hover{background:#272e39;border-color:var(--line2)}
+  .item.sel{border-color:var(--acc);border-left:4px solid var(--acc);padding-left:6px;background:rgba(240,128,60,.14);box-shadow:0 0 0 1px var(--acc)}
   .item .sw{width:13px;height:13px;border-radius:3px} .item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
   .item .eye{color:var(--mut);cursor:pointer;font-size:12px}
   .row{display:flex;align-items:center;gap:6px}.row label{color:var(--mut);width:58px;font-size:11px}
@@ -45,7 +52,7 @@
   .vpbar{position:absolute;left:12px;bottom:12px;display:flex;gap:5px;background:rgba(25,29,36,.85);border:1px solid var(--line);border-radius:9px;padding:5px;backdrop-filter:blur(6px)}
   .cube{position:absolute;right:12px;top:12px;display:grid;grid-template-columns:repeat(2,42px);gap:5px}
   .cube button{background:rgba(25,29,36,.85);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:7px 0;cursor:pointer;font-size:11px;font-weight:700}
-  .cube button:hover{background:var(--blue);color:#fff}
+  .cube button:hover{background:var(--blue);color:#0b2239}
   .status{display:flex;gap:16px;padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--mut);font-size:11px}
   .status b{color:var(--txt)} .status .sp{flex:1}
   .hint{color:var(--mut);font-size:11px;line-height:1.5}
@@ -60,35 +67,35 @@
   .badge{font-size:10px;background:#2c5a44;color:var(--ok);border-radius:5px;padding:1px 6px;font-weight:700}
 </style>
 </head>
-<body>
+<body data-theme="dark">
 <div class="app">
   <div class="top">
     <div class="brand"><span class="d"></span> MakerForge <small>B-Rep CAD</small></div>
-    <div class="kernel load" id="kernel"><span class="kd"></span><span id="kernelTxt">Loading OpenCascade…</span></div>
+    <div class="kernel load" id="kernel" role="status" aria-live="polite"><span class="kd"></span><span id="kernelTxt">Loading OpenCascade…</span></div>
     <div class="g">
-      <button class="btn" data-add="box" disabled>🟦 Box</button>
-      <button class="btn" data-add="cylinder" disabled>🥫 Cylinder</button>
-      <button class="btn" data-add="sphere" disabled>🔵 Sphere</button>
+      <button class="btn" data-add="box" disabled aria-label="Add box">🟦 Box</button>
+      <button class="btn" data-add="cylinder" disabled aria-label="Add cylinder">🥫 Cylinder</button>
+      <button class="btn" data-add="sphere" disabled aria-label="Add sphere">🔵 Sphere</button>
     </div>
     <div class="g">
-      <button class="btn" id="opFuse" disabled>◕ Combine</button>
-      <button class="btn" id="opCut" disabled>◐ Cut</button>
-      <button class="btn" id="opInt" disabled>◑ Intersect</button>
+      <button class="btn" id="opFuse" disabled aria-label="Combine selected bodies">◕ Combine</button>
+      <button class="btn" id="opCut" disabled aria-label="Cut selected bodies">◐ Cut</button>
+      <button class="btn" id="opInt" disabled aria-label="Intersect selected bodies">◑ Intersect</button>
     </div>
     <div class="g">
-      <button class="btn" id="opFillet" disabled>◜ Fillet <span class="badge">B-Rep</span></button>
-      <button class="btn" id="opChamfer" disabled>◹ Chamfer</button>
+      <button class="btn" id="opFillet" disabled aria-label="Fillet edges">◜ Fillet <span class="badge">B-Rep</span></button>
+      <button class="btn" id="opChamfer" disabled aria-label="Chamfer edges">◹ Chamfer</button>
     </div>
     <div class="g">
-      <button class="btn" id="mDup" disabled>⧉ Dup</button>
-      <button class="btn" id="mDel" disabled>🗑 Del</button>
-      <button class="btn" id="mUndo" disabled>↶</button>
-      <button class="btn" id="mRedo" disabled>↷</button>
+      <button class="btn" id="mDup" disabled aria-label="Duplicate">⧉ Dup</button>
+      <button class="btn" id="mDel" disabled aria-label="Delete">🗑 Del</button>
+      <button class="btn" id="mUndo" disabled aria-label="Undo">↶</button>
+      <button class="btn" id="mRedo" disabled aria-label="Redo">↷</button>
     </div>
     <div style="flex:1"></div>
     <div class="g" style="border:none">
-      <button class="btn" id="exSTL" disabled>⇩ STL</button>
-      <button class="btn pri" id="exSTEP" disabled>⇩ STEP <span class="badge">B-Rep</span></button>
+      <button class="btn" id="exSTL" disabled aria-label="Export STL">⇩ STL</button>
+      <button class="btn pri" id="exSTEP" disabled aria-label="Export STEP">⇩ STEP <span class="badge">B-Rep</span></button>
     </div>
   </div>
 
@@ -97,17 +104,17 @@
       <div class="sec"><h3>Bodies</h3><div class="body" id="tree"><div class="hint">Waiting for the CAD kernel…</div></div></div>
     </div>
     <div class="vp" id="vp">
-      <canvas id="gl"></canvas>
+      <canvas id="gl" role="img" aria-label="3D viewport"></canvas>
       <div class="cube">
-        <button data-view="iso">Iso</button><button data-view="front">Front</button>
-        <button data-view="top">Top</button><button data-view="right">Right</button>
+        <button data-view="iso" aria-label="Isometric view">Iso</button><button data-view="front" aria-label="Front view">Front</button>
+        <button data-view="top" aria-label="Top view">Top</button><button data-view="right" aria-label="Right view">Right</button>
       </div>
       <div class="vpbar">
-        <button class="btn" id="vFit">▣ Fit</button>
-        <button class="btn" id="vEdges">╱ Edges</button>
-        <button class="btn" id="vWire">◇ Wire</button>
+        <button class="btn" id="vFit" aria-label="Fit view">▣ Fit</button>
+        <button class="btn" id="vEdges" aria-label="Toggle edge display">╱ Edges</button>
+        <button class="btn" id="vWire" aria-label="Toggle wireframe">◇ Wire</button>
       </div>
-      <div class="overlay" id="overlay">
+      <div class="overlay" id="overlay" role="status">
         <div class="spin"></div>
         <h2 id="ovH">Loading the real CAD kernel…</h2>
         <p id="ovP">Fetching <b>OpenCascade</b> (the kernel behind FreeCAD) — about <b>11&nbsp;MB</b> of WebAssembly. First load can take 10–40&nbsp;seconds and needs an internet connection. It'll be cached after this.</p>
@@ -119,7 +126,7 @@
     </div>
   </div>
 
-  <div class="status">
+  <div class="status" role="status" aria-live="polite">
     <span>Kernel: <b id="stK">loading</b></span>
     <span>Bodies: <b id="stN">0</b></span>
     <span>Sel: <b id="stSel">—</b></span>
@@ -127,7 +134,7 @@
     <span>Orbit: drag · Pan: right-drag · Zoom: wheel · This uses OpenCascade B-Rep (true fillets + STEP)</span>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module">
 /* =====================================================================
@@ -352,6 +359,22 @@ $('#vEdges').classList.add('on');
 window.addEventListener('keydown',e=>{if(/input|select/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#mDel').click();}if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?$('#mRedo').click():$('#mUndo').click();}if(k==='f')fitView();});
 
 bootKernel();
+
+/* ===================== Additive a11y helpers =====================
+   Purely additive — no existing logic, function names or IDs are changed. */
+(function(){
+  // Body-list rows are clickable divs — make them keyboard operable.
+  const tree=$('#tree');
+  const upgradeRows=()=>tree.querySelectorAll('.item').forEach(d=>{
+    if(!d.hasAttribute('role')){d.setAttribute('role','button');d.tabIndex=0;}
+  });
+  new MutationObserver(upgradeRows).observe(tree,{childList:true,subtree:true});
+  upgradeRows();
+  tree.addEventListener('keydown',e=>{
+    const row=e.target.closest&&e.target.closest('.item');if(!row)return;
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();row.click();}
+  });
+})();
 </script>
 </body>
 </html>

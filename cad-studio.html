@@ -4,8 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MakerForge · 3D CAD</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
-  :root{--bg:#12151a;--panel:#191d24;--panel2:#20252e;--line:#2b323d;--line2:#3a434f;--txt:#e8edf3;--mut:#8b96a5;--acc:#f0803c;--acc2:#d96a28;--blue:#4c9ffe;--ok:#3ecf8e;--danger:#ff5f6d;}
+  /* Palette remapped onto shared --tk-* tokens (tokens.css); old names kept working.
+     Fallbacks preserve the original dark palette if tokens.css fails to load. */
+  :root{--bg:var(--tk-bg,#12151a);--panel:var(--tk-panel,#191d24);--panel2:var(--tk-panel-2,#20252e);--line:var(--tk-line,#2b323d);--line2:var(--tk-line-2,#3a434f);--txt:var(--tk-text,#e8edf3);--mut:var(--tk-mut,#9aa6b5);--acc:var(--tk-acc,#f0803c);--acc2:var(--tk-acc-2,#d96a28);--blue:var(--tk-blue,#6db1ff);--ok:var(--tk-ok,#3ecf8e);--danger:var(--tk-danger,#ff5f6d);}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
   .app{display:grid;grid-template-rows:auto 1fr auto;height:100%}
@@ -19,11 +22,11 @@
   .btn:hover{background:#2a323d;border-color:#4c5866}
   .btn:active{transform:translateY(1px)}
   .btn.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));border-color:var(--acc2);color:#231103;font-weight:700}
-  .btn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn.on{background:var(--blue);border-color:var(--blue);color:#0b2239}
   .menu{position:absolute;top:110%;left:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:5px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:40;display:none;flex-direction:column;gap:2px}
   .menu.show{display:flex}
   .menu button{background:transparent;border:none;color:var(--txt);text-align:left;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center;font-family:inherit}
-  .menu button:hover{background:var(--blue);color:#fff}
+  .menu button:hover{background:var(--blue);color:#0b2239}
   .menu .sep{height:1px;background:var(--line);margin:3px 2px}
   .main{display:grid;grid-template-columns:250px 1fr 250px;min-height:0}
   .side{background:var(--panel);overflow-y:auto;display:flex;flex-direction:column}
@@ -33,7 +36,8 @@
   .sec h3 button{background:transparent;border:none;color:var(--mut);cursor:pointer;font-size:14px}
   .body{padding:8px 10px;display:flex;flex-direction:column;gap:7px}
   .feat{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
-  .feat.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .feat:hover{background:#272e39;border-color:var(--line2)}
+  .feat.sel{border-color:var(--acc);border-left:4px solid var(--acc);padding-left:6px;background:rgba(240,128,60,.14);box-shadow:0 0 0 1px var(--acc)}
   .feat.consumed{opacity:.4}
   .feat .ic{font-size:14px;width:18px;text-align:center}
   .feat .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
@@ -46,14 +50,14 @@
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld span{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
   input,select{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:6px;padding:5px 7px;font:inherit;font-size:12px;width:100%}
-  input:focus,select:focus{outline:1px solid var(--acc)}
+  /* (removed input:focus outline override — tokens.css :focus-visible ring applies) */
   input[type=color]{padding:2px;height:28px}
   input[type=range]{padding:0;accent-color:var(--acc)}
   .vp{position:relative;background:radial-gradient(circle at 50% 40%,#20252d,#0e1116)}
   #gl{position:absolute;inset:0;display:block;width:100%;height:100%}
   .cube{position:absolute;right:12px;top:12px;display:grid;grid-template-columns:repeat(2,42px);gap:5px}
   .cube button{background:rgba(25,29,36,.85);border:1px solid var(--line2);color:var(--txt);border-radius:7px;padding:7px 0;cursor:pointer;font-size:11px;font-weight:700;backdrop-filter:blur(6px)}
-  .cube button:hover{background:var(--blue);color:#fff}
+  .cube button:hover{background:var(--blue);color:#0b2239}
   .vpbar{position:absolute;left:12px;bottom:12px;display:flex;gap:5px;background:rgba(25,29,36,.85);border:1px solid var(--line);border-radius:9px;padding:5px;backdrop-filter:blur(6px)}
   .status{display:flex;gap:16px;padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--mut);font-size:11px}
   .status b{color:var(--txt)}
@@ -71,58 +75,74 @@
   .modal-bg.show{display:flex}
   .modal{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:18px;width:min(520px,92vw);max-height:86vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
   .modal h2{margin:0 0 6px}.modal .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .tour ul{margin:8px 0 0;padding-left:20px;line-height:1.7}
+  .tour li{margin-bottom:6px}
+  /* ---- responsive: side panels become overlay drawers ≤1000px ---- */
+  .drawerBtn{display:none}
+  @media(max-width:1000px){
+    .main{grid-template-columns:1fr;position:relative}
+    .side{position:absolute;top:0;bottom:0;width:min(300px,84vw);z-index:45;transition:transform .18s ease;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+    .side.l{left:0;transform:translateX(-100%)}
+    .side.r{right:0;transform:translateX(100%)}
+    .side.open{transform:translateX(0)}
+    .drawerBtn{display:inline-flex}
+  }
 </style>
 </head>
-<body>
+<body data-theme="dark">
 <div class="app">
   <div class="top">
     <div class="brand"><span class="d"></span> MakerForge <small>3D CAD</small></div>
     <div class="g">
-      <button class="btn" id="mNew">＋ New</button>
-      <button class="btn" id="mSave">💾 Save</button>
-      <button class="btn" id="mOpen">📂 Open</button>
+      <button class="btn drawerBtn" id="drawerL" aria-expanded="false" aria-label="Toggle timeline panel">☰ Timeline</button>
+      <button class="btn drawerBtn" id="drawerR" aria-expanded="false" aria-label="Toggle properties panel">🛠 Props</button>
     </div>
     <div class="g">
-      <div style="position:relative"><button class="btn" data-menu="addM">🧊 Add Body ▾</button>
+      <button class="btn" id="mNew" aria-label="New model">＋ New</button>
+      <button class="btn" id="mSave" aria-label="Save model">💾 Save</button>
+      <button class="btn" id="mOpen" aria-label="Open model file">📂 Open</button>
+    </div>
+    <div class="g">
+      <div style="position:relative"><button class="btn" data-menu="addM" aria-haspopup="true" aria-expanded="false" aria-label="Add Body menu">🧊 Add Body ▾</button>
         <div class="menu" id="addM">
-          <button data-add="box">🟦 Box</button>
-          <button data-add="cylinder">🥫 Cylinder</button>
-          <button data-add="sphere">🔵 Sphere</button>
-          <button data-add="cone">🔺 Cone</button>
-          <button data-add="torus">🍩 Torus</button>
+          <button data-add="box" aria-label="Add box">🟦 Box</button>
+          <button data-add="cylinder" aria-label="Add cylinder">🥫 Cylinder</button>
+          <button data-add="sphere" aria-label="Add sphere">🔵 Sphere</button>
+          <button data-add="cone" aria-label="Add cone">🔺 Cone</button>
+          <button data-add="torus" aria-label="Add torus">🍩 Torus</button>
         </div>
       </div>
-      <div style="position:relative"><button class="btn" data-menu="skM">✏️ Sketch ▾</button>
+      <div style="position:relative"><button class="btn" data-menu="skM" aria-haspopup="true" aria-expanded="false" aria-label="Sketch menu">✏️ Sketch ▾</button>
         <div class="menu" id="skM">
-          <button data-add="ext_rect">▭ Rectangle → Extrude</button>
-          <button data-add="ext_circle">◯ Circle → Extrude</button>
-          <button data-add="ext_poly">⬡ Polygon → Extrude</button>
+          <button data-add="ext_rect" aria-label="Rectangle extrude">▭ Rectangle → Extrude</button>
+          <button data-add="ext_circle" aria-label="Circle extrude">◯ Circle → Extrude</button>
+          <button data-add="ext_poly" aria-label="Polygon extrude">⬡ Polygon → Extrude</button>
           <div class="sep"></div>
-          <button data-add="revolve">🔄 Rectangle → Revolve</button>
+          <button data-add="revolve" aria-label="Rectangle revolve">🔄 Rectangle → Revolve</button>
         </div>
       </div>
     </div>
     <div class="g">
-      <button class="btn" id="opUnion" title="Combine (select 2)">◕ Combine</button>
-      <button class="btn" id="opSub" title="Cut (A − B)">◐ Cut</button>
-      <button class="btn" id="opInt" title="Intersect">◑ Intersect</button>
+      <button class="btn" id="opUnion" title="Combine (select 2)" aria-label="Combine selected bodies">◕ Combine</button>
+      <button class="btn" id="opSub" title="Cut (A − B)" aria-label="Cut selected bodies">◐ Cut</button>
+      <button class="btn" id="opInt" title="Intersect" aria-label="Intersect selected bodies">◑ Intersect</button>
     </div>
     <div class="g">
       <button class="btn" id="mUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
       <button class="btn" id="mRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
-      <button class="btn" id="mDup">⧉ Duplicate</button>
-      <button class="btn" id="mDel">🗑 Delete</button>
-      <button class="btn" id="mMeasure">📏 Measure</button>
-      <button class="btn" id="mSection">✂ Section</button>
-      <button class="btn" id="mInspect" title="Mass properties (volume, area, centroid, mass)">🔍 Inspect</button>
+      <button class="btn" id="mDup" aria-label="Duplicate">⧉ Duplicate</button>
+      <button class="btn" id="mDel" aria-label="Delete">🗑 Delete</button>
+      <button class="btn" id="mMeasure" aria-label="Measure distance">📏 Measure</button>
+      <button class="btn" id="mSection" aria-label="Section view">✂ Section</button>
+      <button class="btn" id="mInspect" title="Mass properties (volume, area, centroid, mass)" aria-label="Inspect mass properties">🔍 Inspect</button>
     </div>
     <div style="flex:1"></div>
     <div class="g" style="border:none">
-      <div style="position:relative"><button class="btn pri" data-menu="exM">⇩ Export ▾</button>
+      <div style="position:relative"><button class="btn pri" data-menu="exM" aria-haspopup="true" aria-expanded="false" aria-label="Export menu">⇩ Export ▾</button>
         <div class="menu" id="exM" style="right:0;left:auto">
-          <button data-ex="stlb">⬢ STL (binary)</button>
-          <button data-ex="stla">⬢ STL (ascii)</button>
-          <button data-ex="obj">◈ OBJ</button>
+          <button data-ex="stlb" aria-label="Export STL binary">⬢ STL (binary)</button>
+          <button data-ex="stla" aria-label="Export STL ASCII">⬢ STL (ascii)</button>
+          <button data-ex="obj" aria-label="Export OBJ">◈ OBJ</button>
         </div>
       </div>
     </div>
@@ -136,7 +156,7 @@
         <div class="body" id="tree"><div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div></div>
       </div>
       <div class="sec">
-        <h3>Parameters <button id="addParam" title="Add variable">＋</button></h3>
+        <h3>Parameters <button id="addParam" title="Add variable" aria-label="Add variable">＋</button></h3>
         <div class="body" id="paramBox">
           <div class="hint">Named variables you can use in any number field, e.g. <b>wall=3</b> then type <b>wall*2</b>.</div>
           <div id="paramList"></div>
@@ -146,16 +166,16 @@
 
     <!-- CENTER viewport -->
     <div class="vp" id="vp">
-      <canvas id="gl"></canvas>
+      <canvas id="gl" role="img" aria-label="3D viewport"></canvas>
       <div class="cube">
-        <button data-view="iso">Iso</button><button data-view="front">Front</button>
-        <button data-view="top">Top</button><button data-view="right">Right</button>
+        <button data-view="iso" aria-label="Isometric view">Iso</button><button data-view="front" aria-label="Front view">Front</button>
+        <button data-view="top" aria-label="Top view">Top</button><button data-view="right" aria-label="Right view">Right</button>
       </div>
       <div class="vpbar">
-        <button class="btn" id="vFit" title="Fit all">▣ Fit</button>
-        <button class="btn" id="vProj" title="Perspective / Orthographic">⧉ Persp</button>
-        <button class="btn" id="vGrid" title="Grid">▦</button>
-        <button class="btn" id="vWire" title="Wireframe">◇</button>
+        <button class="btn" id="vFit" title="Fit all" aria-label="Fit view">▣ Fit</button>
+        <button class="btn" id="vProj" title="Perspective / Orthographic" aria-label="Toggle perspective or orthographic projection">⧉ Persp</button>
+        <button class="btn" id="vGrid" title="Grid" aria-label="Toggle grid">▦</button>
+        <button class="btn" id="vWire" title="Wireframe" aria-label="Toggle wireframe">◇</button>
       </div>
     </div>
 
@@ -201,7 +221,7 @@
     </div>
   </div>
 
-  <div class="status">
+  <div class="status" role="status" aria-live="polite">
     <span>Sel: <b id="stSel">—</b></span>
     <span>Bodies: <b id="stBodies">0</b></span>
     <span>Triangles: <b id="stTris">0</b></span>
@@ -211,8 +231,18 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="modal-bg" id="mbg"><div class="modal" id="modal"></div></div>
+<div class="modal-bg" id="tourBg"><div class="modal tour" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <h2 id="tourTitle">Quick start</h2>
+  <ul>
+    <li>The <b>🧊 Add Body</b> and <b>✏️ Sketch</b> menus create shapes — primitives, extrudes and revolves.</li>
+    <li>The <b>Feature Timeline</b> (left) is your editable history — click any feature to change its numbers later.</li>
+    <li>Select <b>two bodies</b> (Ctrl/Cmd-click the timeline or Shift-click in 3D), then <b>Combine</b>, <b>Cut</b> or <b>Intersect</b>.</li>
+    <li><b>🔍 Inspect</b> shows mass properties — volume, surface area, centroid and estimated weight.</li>
+  </ul>
+  <div class="foot"><button class="btn pri" id="tourDone">Got it</button></div>
+</div></div>
 <input type="file" id="fileIn" accept=".json,.mkc" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -660,6 +690,54 @@ function boot(){
   setTimeout(onResize,50);
 }
 boot();
+
+/* ===================== Additive a11y & responsive helpers =====================
+   Purely additive — no existing logic, function names or IDs are changed. */
+(function(){
+  // 3(a): keep aria-expanded of [data-menu] buttons in sync with the .show class.
+  const syncMenus=()=>document.querySelectorAll('[data-menu]').forEach(b=>{
+    const m=document.getElementById(b.dataset.menu);
+    if(m)b.setAttribute('aria-expanded',m.classList.contains('show')?'true':'false');
+  });
+  document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',syncMenus)); // runs after the toggle handler
+  document.addEventListener('click',syncMenus); // outside-click close path
+  syncMenus();
+
+  // 3(b): feature-timeline rows are clickable divs — make them keyboard operable.
+  const tree=$('#tree');
+  const upgradeRows=()=>tree.querySelectorAll('.feat').forEach(d=>{
+    if(!d.hasAttribute('role')){d.setAttribute('role','button');d.tabIndex=0;}
+  });
+  new MutationObserver(upgradeRows).observe(tree,{childList:true,subtree:true});
+  upgradeRows();
+  tree.addEventListener('keydown',e=>{
+    const row=e.target.closest&&e.target.closest('.feat');if(!row)return;
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();row.click();}
+  });
+
+  // 6: overlay drawer toggles for the side panels (≤1000px; buttons hidden above that).
+  const panels={L:{btn:$('#drawerL'),panel:document.querySelector('.side.l')},
+                R:{btn:$('#drawerR'),panel:document.querySelector('.side.r')}};
+  const setDrawer=(d,open)=>{d.panel.classList.toggle('open',open);d.btn.setAttribute('aria-expanded',String(open));};
+  Object.keys(panels).forEach(k=>{
+    const d=panels[k],other=panels[k==='L'?'R':'L'];
+    if(!d.btn||!d.panel)return;
+    d.btn.addEventListener('click',()=>{
+      const open=!d.panel.classList.contains('open');
+      setDrawer(d,open);if(open)setDrawer(other,false);
+    });
+  });
+
+  // 7: first-run coach overlay (dismiss stored in localStorage 'mkc_tour_done').
+  let seen='1';try{seen=localStorage.getItem('mkc_tour_done');}catch(_){/* storage blocked: skip tour */}
+  if(!seen){
+    const bg=$('#tourBg');bg.classList.add('show');
+    const done=()=>{bg.classList.remove('show');try{localStorage.setItem('mkc_tour_done','1');}catch(_){}};
+    $('#tourDone').addEventListener('click',done);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bg.classList.contains('show'))done();});
+    setTimeout(()=>$('#tourDone').focus(),0);
+  }
+})();
 </script>
 </body>
 </html>
