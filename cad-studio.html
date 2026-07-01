@@ -143,6 +143,8 @@
           <button data-add="ext_poly" aria-label="Polygon extrude">⬡ Polygon → Extrude</button>
           <div class="sep"></div>
           <button data-add="revolve" aria-label="Rectangle revolve">🔄 Rectangle → Revolve</button>
+          <div class="sep"></div>
+          <button data-add="text3d" aria-label="Solid 3D text">🔤 3D Text</button>
         </div>
       </div>
     </div>
@@ -390,8 +392,144 @@ function newFeature(kind){
     ext_circle:{...base,type:'extrude',name:'Extrude (circle)',profile:'circle',plane:'XY',r:18,dist:20,sym:false},
     ext_poly:{...base,type:'extrude',name:'Extrude (polygon)',profile:'poly',plane:'XY',r:20,n:6,dist:20,sym:false},
     revolve:{...base,type:'revolve',name:'Revolve',r0:8,w:14,h:30,angle:360,seg:64},
+    text3d:{...base,type:'text3d',name:'3D Text',text:'ABC',size:20,depth:6,font:'sans-serif'},
+    polyx:{...base,type:'polyx',name:'Profile',pts:[[0,15],[13,-9],[-13,-9]],dist:10},
   }[kind];
   return F;
+}
+
+/* ===================== Solid 3D text & freeform profiles =====================
+   3D text: render the string to an offscreen canvas, trace the filled pixels
+   into outline loops (rectilinear boundary-follow), simplify, nest outers and
+   holes, then extrude. Works with any installed font, fully offline.
+   The tracing helpers are pure and unit-tested (tests/trace-contours.test.js). */
+
+/* Boundary loops of a binary grid. isFilled(x,y) over a w×h cell grid →
+   array of closed loops [[x,y],…] in grid corner coordinates. Every boundary
+   edge is used exactly once; holes come back as separate loops. */
+function traceGridContours(isFilled,w,h){
+  const F=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&!!isFilled(x,y);
+  const map=new Map();const key=(x,y)=>x+','+y;
+  const add=(x1,y1,x2,y2)=>{const k=key(x1,y1);let l=map.get(k);if(!l){l=[];map.set(k,l);}l.push([x2,y2]);};
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(!F(x,y))continue;
+    if(!F(x,y-1))add(x,y,x+1,y);        // top edge →
+    if(!F(x+1,y))add(x+1,y,x+1,y+1);    // right edge ↓
+    if(!F(x,y+1))add(x+1,y+1,x,y+1);    // bottom edge ←
+    if(!F(x-1,y))add(x,y+1,x,y);        // left edge ↑
+  }
+  const loops=[];const guard=w*h*8+64;
+  for(const k0 of [...map.keys()]){
+    for(;;){
+      const lst0=map.get(k0);
+      if(!lst0||!lst0.length)break;
+      const start=k0.split(',').map(Number);
+      const loop=[start];let cur=start,steps=0;
+      for(;;){
+        if(++steps>guard)break; // malformed input safety
+        const lst=map.get(key(cur[0],cur[1]));
+        if(!lst||!lst.length)break;
+        const nxt=lst.pop();
+        if(nxt[0]===start[0]&&nxt[1]===start[1])break; // closed
+        loop.push(nxt);cur=nxt;
+      }
+      if(loop.length>=3)loops.push(loop);
+    }
+  }
+  return loops;
+}
+/* Collinear removal + Ramer–Douglas–Peucker on a closed loop. */
+function simplifyLoop(pts,eps){
+  const n=pts.length;if(n<4)return pts.slice();
+  let out=pts.filter((p,i)=>{
+    const a=pts[(i-1+n)%n],b=pts[(i+1)%n];
+    return (b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0])!==0;
+  });
+  if(!eps||out.length<5)return out;
+  const d2seg=(p,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1];const l2=dx*dx+dy*dy;let t=l2?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2:0;t=Math.max(0,Math.min(1,t));const qx=a[0]+t*dx-p[0],qy=a[1]+t*dy-p[1];return qx*qx+qy*qy;};
+  const rdp=(pts,i,j,keep)=>{
+    let mx=-1,mi=-1;
+    for(let k=i+1;k<j;k++){const d=d2seg(pts[k],pts[i],pts[j]);if(d>mx){mx=d;mi=k;}}
+    if(mx>eps*eps){rdp(pts,i,mi,keep);keep.add(mi);rdp(pts,mi,j,keep);}
+  };
+  const closed=[...out,out[0]];const keep=new Set([0,closed.length-1]);
+  rdp(closed,0,closed.length-1,keep);
+  const res=[...keep].sort((a,b)=>a-b).map(i=>closed[i]);res.pop();
+  return res.length>=3?res:out;
+}
+/* Nest loops into shapes: even containment depth = outer, odd = hole of its
+   immediate parent. Returns [{outer, holes:[…]}]. */
+function assembleShapes(loops){
+  const crossX=(l,y)=>{const xs=[];for(let i=0;i<l.length;i++){const a=l[i],b=l[(i+1)%l.length];if((a[1]>y)!==(b[1]>y))xs.push(a[0]+(y-a[1])*(b[0]-a[0])/(b[1]-a[1]));}return xs.sort((p,q)=>p-q);};
+  const inside=(pt,l)=>{const xs=crossX(l,pt[1]);let c=0;for(const x of xs)if(x<pt[0])c++;return(c%2)===1;};
+  const absArea=l=>{let a=0;for(let i=0;i<l.length;i++){const p=l[i],q=l[(i+1)%l.length];a+=p[0]*q[1]-q[0]*p[1];}return Math.abs(a/2);};
+  // Containment probe: a nudged VERTEX of the loop (never its interior mid-
+  // point — for a ring that midpoint can fall inside the ring's own hole).
+  // Separate traced contours are ≥1 grid cell apart, so a 1e-4 nudge is safe.
+  const info=loops.map(l=>({l,pt:[l[0][0]+1e-4,l[0][1]+1e-4],area:absArea(l),parents:[]}));
+  info.forEach(a=>{info.forEach(b=>{if(a!==b&&inside(a.pt,b.l))a.parents.push(b);});});
+  const shapes=[];
+  info.forEach(a=>{a.depth=a.parents.length;});
+  info.filter(a=>a.depth%2===0).forEach(a=>{a.shape={outer:a.l,holes:[]};shapes.push(a.shape);});
+  info.filter(a=>a.depth%2===1).forEach(hole=>{
+    const cands=hole.parents.filter(p=>p.depth===hole.depth-1&&p.shape);
+    if(!cands.length)return;
+    cands.sort((p,q)=>p.area-q.area);
+    cands[0].shape.holes.push(hole.l);
+  });
+  return shapes;
+}
+/* Parametric profile presets for add_extruded_polygon — generated locally so
+   the LLM never has to emit long coordinate arrays (a known Gemini failure
+   mode). Pure, unit-tested. Returns CCW points in mm, centered, y-up. */
+function presetProfile(name,opts){
+  opts=opts||{};const w=+opts.width>0?+opts.width:40;
+  if(name==='heart'){
+    const seg=+opts.points>=12?Math.min(120,+opts.points|0):48;
+    const raw=[];
+    for(let i=0;i<seg;i++){
+      const t=Math.PI*2*i/seg;
+      raw.push([16*Math.pow(Math.sin(t),3),
+        13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]);
+    }
+    let mnx=Infinity,mxx=-Infinity,mny=Infinity,mxy=-Infinity;
+    raw.forEach(p=>{mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1]);});
+    const s=w/(mxx-mnx),cx=(mnx+mxx)/2,cy=(mny+mxy)/2;
+    return raw.map(p=>[(p[0]-cx)*s,(p[1]-cy)*s]).reverse(); // parametric curve runs CW; contract is CCW
+  }
+  if(name==='star'){
+    const n=+opts.points>=3?Math.min(24,+opts.points|0):5;
+    const inner=(+opts.inner>0&&+opts.inner<1)?+opts.inner:0.45;
+    const R=w/2,pts=[];
+    for(let i=0;i<n*2;i++){
+      const a=Math.PI/2+Math.PI*i/n,r=(i%2===0)?R:R*inner;
+      pts.push([Math.cos(a)*r,Math.sin(a)*r]);
+    }
+    return pts;
+  }
+  return null;
+}
+/* Render f.text with the browser's font engine and vectorize it. Returns
+   shapes in mm, centered on the origin, y-up (canvas y flipped). */
+function text3dShapes(f){
+  const px=96,pad=8;
+  const cv=document.createElement('canvas');let c2=cv.getContext('2d',{willReadFrequently:true});
+  const fontStr=`bold ${px}px ${f.font||'sans-serif'}`;
+  c2.font=fontStr;
+  const tw=Math.ceil(c2.measureText(f.text||'').width);
+  cv.width=Math.max(2,Math.min(4096,tw+pad*2));cv.height=Math.ceil(px*1.5)+pad*2;
+  c2=cv.getContext('2d',{willReadFrequently:true});
+  c2.font=fontStr;c2.textBaseline='alphabetic';c2.fillStyle='#000';
+  c2.fillText(f.text||'',pad,pad+px);
+  const w=cv.width,h=cv.height,img=c2.getImageData(0,0,w,h).data;
+  let loops=traceGridContours((x,y)=>img[(y*w+x)*4+3]>127,w,h);
+  loops=loops.map(l=>simplifyLoop(l,1.15)).filter(l=>l.length>=3);
+  if(!loops.length)return[];
+  let mnx=Infinity,mxx=-Infinity,mny=Infinity,mxy=-Infinity;
+  loops.forEach(l=>l.forEach(p=>{mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1]);}));
+  const scale=(f.size||20)/px,cx=(mnx+mxx)/2,cy=(mny+mxy)/2;
+  const mm=p=>[(p[0]-cx)*scale,(cy-p[1])*scale];
+  return assembleShapes(loops).map(s=>({outer:s.outer.map(mm),holes:s.holes.map(hl=>hl.map(mm))}));
 }
 
 /* ---- build geometry for a single feature (returns THREE geometry, local) ---- */
@@ -416,6 +554,30 @@ function featureGeometry(f){
   else if(f.type==='revolve'){
     const pts=[new THREE.Vector2(f.r0,0),new THREE.Vector2(f.r0+f.w,0),new THREE.Vector2(f.r0+f.w,f.h),new THREE.Vector2(f.r0,f.h),new THREE.Vector2(f.r0,0)];
     g=new THREE.LatheGeometry(pts,Math.max(3,f.seg|0),0,f.angle*Math.PI/180);
+  }
+  else if(f.type==='text3d'){
+    const shs=text3dShapes(f);
+    if(!shs.length)g=new THREE.BoxGeometry(1,1,1);
+    else{
+      const shapes=shs.map(s=>{
+        const sh=new THREE.Shape(s.outer.map(p=>new THREE.Vector2(p[0],p[1])));
+        s.holes.forEach(hl=>sh.holes.push(new THREE.Path(hl.map(q=>new THREE.Vector2(q[0],q[1])))));
+        return sh;
+      });
+      const depth=Math.max(0.2,+f.depth||6);
+      g=new THREE.ExtrudeGeometry(shapes,{depth,bevelEnabled:false});
+      g.translate(0,0,-depth/2); // center so position = body center
+    }
+  }
+  else if(f.type==='polyx'){
+    const pts=(f.pts||[]).filter(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1]));
+    if(pts.length<3)g=new THREE.BoxGeometry(1,1,1);
+    else{
+      const sh=new THREE.Shape(pts.map(p=>new THREE.Vector2(p[0],p[1])));
+      const depth=Math.max(0.2,+f.dist||10);
+      g=new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false});
+      g.translate(0,0,-depth/2);
+    }
   }
   return g;
 }
@@ -532,7 +694,7 @@ function applyClip(mat){if(APP.section){mat.clippingPlanes=[clipPlane];}else mat
 function updateClip(){const ax=$('#secAxis').value,pos=+$('#secPos').value,flip=$('#secFlip').checked?-1:1;const n=new THREE.Vector3(ax==='x'?1:0,ax==='y'?1:0,ax==='z'?1:0).multiplyScalar(-flip);clipPlane.normal.copy(n);clipPlane.constant=pos*flip;rebuild();}
 
 /* ===================== UI: tree, props, params ===================== */
-function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑'}[t]||'▪';}
+function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑',text3d:'🔤',polyx:'⬟'}[t]||'▪';}
 function renderTree(){
   const el=$('#tree');
   if(!APP.features.length){el.innerHTML='<div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div>';return;}
@@ -568,10 +730,12 @@ function renderProps(){
     h+=g2(NUM('Distance','dist',f)+`<div class="fld"><span>Symmetric</span><select data-k="sym"><option value="false" ${!f.sym?'selected':''}>No</option><option value="true" ${f.sym?'selected':''}>Yes</option></select></div>`);
   }
   else if(f.type==='revolve')h+=g(NUM('Inner r','r0',f)+NUM('Wall','w',f)+NUM('Height','h',f))+g2(NUM('Angle°','angle',f)+NUM('Quality','seg',f));
+  else if(f.type==='text3d')h+=`<div class="fld"><span>Text</span><input data-k="text" value="${String(f.text).replace(/"/g,'&quot;')}"></div>`+g(NUM('Size mm','size',f)+NUM('Depth','depth',f)+`<div class="fld"><span>Font</span><input data-k="font" value="${String(f.font||'sans-serif').replace(/"/g,'&quot;')}"></div>`);
+  else if(f.type==='polyx')h+=g2(NUM('Depth','dist',f)+`<div class="fld"><span>Profile</span><input value="${(f.pts||[]).length} points" disabled></div>`)+`<div class="hint">Freeform profile (heart, star, …) — reshape it via the ✨ AI copilot.</div>`;
   else if(f.type==='boolean'){h+=`<div class="hint">Operation: <b>${f.op}</b>. Edit the inputs above it in the timeline.</div>`;}
   if(f.type!=='boolean')h+=`<div class="hint">Position &amp; rotation</div>`+g(NUM('X','x',f)+NUM('Y','y',f)+NUM('Z','z',f))+g(NUM('Rot X','rx',f)+NUM('Rot Y','ry',f)+NUM('Rot Z','rz',f));
   box.innerHTML=h;
-  box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else f[k]=evalNum(v,f[k]);pushHist();rebuild();});});
+  box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;if(!k)return;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else if(k==='text'||k==='font')f[k]=v;else f[k]=evalNum(v,f[k]);pushHist();rebuild();});});
   // appearance
   ap.innerHTML=`<div class="row"><label>Color</label><input type="color" data-a="color" value="${f.color}"></div>
     <div class="row"><label>Opacity</label><input type="range" min="0.15" max="1" step="0.05" data-a="opacity" value="${f.opacity!=null?f.opacity:1}"></div>
@@ -817,12 +981,13 @@ boot();
 /* Whitelisted, type-coerced application of edits to a feature object.
    Returns {applied:{k:v}, rejected:[k]} and mutates f only for valid keys. */
 function applyFeatureChanges(f,changes){
-  const NUMERIC=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','x','y','z','rx','ry','rz','opacity'];
+  const NUMERIC=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','x','y','z','rx','ry','rz','opacity','size','depth'];
   const BOOL=['visible','suppressed','sym'];
   const applied={},rejected=[];
   for(const k in changes){
     const v=changes[k];
-    if(k==='name'&&typeof v==='string'&&v.trim()){f.name=v.trim();applied[k]=f.name;}
+    if((k==='text'||k==='font')&&'text' in f&&typeof v==='string'){f[k]=v;applied[k]=v;}
+    else if(k==='name'&&typeof v==='string'&&v.trim()){f.name=v.trim();applied[k]=f.name;}
     else if(k==='color'&&/^#[0-9a-fA-F]{6}$/.test(String(v))){f.color=String(v);applied[k]=f.color;}
     else if(BOOL.includes(k)){f[k]=(v===true||v==='true');applied[k]=f[k];}
     else if(NUMERIC.includes(k)){
@@ -837,7 +1002,7 @@ function applyFeatureChanges(f,changes){
 /* Compact scene description for the model. Pure: takes plain data.
    bboxMap: id -> {min:[x,y,z], max:[x,y,z]} world-space (only live bodies). */
 function chatSceneSummary(features,bboxMap,params,selIds){
-  const DIMS=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','profile','plane','sym'];
+  const DIMS=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','profile','plane','sym','text','font','size','depth'];
   const consumedBy={};
   features.forEach(f=>{if(f.type==='boolean'&&!f.suppressed){consumedBy[f.aId]=f.id;consumedBy[f.bId]=f.id;}});
   const round=v=>Math.round(v*100)/100;
@@ -847,6 +1012,7 @@ function chatSceneSummary(features,bboxMap,params,selIds){
     selected_ids:selIds,
     features:features.map(f=>{
       const dims={};DIMS.forEach(k=>{if(f[k]!==undefined)dims[k]=f[k];});
+      if(f.type==='polyx')dims.profile_points=(f.pts||[]).length;
       const out={id:f.id,name:f.name,type:f.type,color:f.color,visible:f.visible,suppressed:f.suppressed,dims,
         position:{x:f.x||0,y:f.y||0,z:f.z||0},rotation_deg:{rx:f.rx||0,ry:f.ry||0,rz:f.rz||0}};
       if(f.type==='boolean'){out.op=f.op;out.input_ids=[f.aId,f.bId];delete out.dims;delete out.position;delete out.rotation_deg;}
@@ -869,7 +1035,9 @@ const CHAT_TOOLS=[
    dims:{type:'object',description:'dimension overrides for the kind, in mm'},
    position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},
    rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}},description:'degrees'}},required:['kind']}},
- {name:'edit_feature',description:'Change properties of an existing feature by id: any dim (w,d,h,r,…), position x/y/z (center, mm), rotation rx/ry/rz (deg), name, color, visible, suppressed. The model rebuilds automatically.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'edit_feature',description:'Change properties of an existing feature by id: any dim (w,d,h,r,…; for 3D text also text/font/size/depth), position x/y/z (center, mm), rotation rx/ry/rz (deg), name, color, visible, suppressed. The model rebuilds automatically.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'add_text3d',description:'Add SOLID 3D text (real letter outlines with holes, extruded). size = capital-letter height in mm, depth = extrusion thickness in mm. The text stands upright facing +Z, centered at position; rotate rx:-90 to emboss it flat on a top face. Returns the new feature id.',input_schema:{type:'object',properties:{text:{type:'string'},size:{type:'number'},depth:{type:'number'},font:{type:'string',description:'CSS font family, default sans-serif'},name:{type:'string'},color:{type:'string'},position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}}}},required:['text']}},
+ {name:'add_extruded_polygon',description:'Add an extruded profile — hearts, stars, arrows, brackets, any outline. PREFER preset for hearts/stars: preset:"heart" (width mm) or preset:"star" (width, points, inner 0–1) — generated locally, no coordinates needed. For other outlines pass points = [[x,y],…] in mm, counter-clockwise, XY plane (X right, Y up), ≤40 points. Profile is centered at position and extruded depth mm along Z (faces +Z; rotate rx:-90 to lay flat on the ground). Returns the new feature id.',input_schema:{type:'object',properties:{preset:{type:'string',enum:['heart','star']},width:{type:'number'},inner:{type:'number'},points:{type:'array',items:{type:'array',items:{type:'number'}}},depth:{type:'number'},name:{type:'string'},color:{type:'string'},position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}}}}}},
  {name:'duplicate_feature',description:'Duplicate a (non-boolean) feature, offset by dx/dy/dz mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'},dz:{type:'number'}},required:['id']}},
  {name:'delete_features',description:'Delete features by id. Booleans referencing a deleted input are removed too.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'boolean_op',description:'Boolean two LIVE bodies (not already consumed): union (combine), subtract (cut b from a), intersect. Creates a new timeline feature; both inputs become consumed.',input_schema:{type:'object',properties:{op:{type:'string',enum:['union','subtract','intersect']},a_id:{type:'integer'},b_id:{type:'integer'}},required:['op','a_id','b_id']}},
@@ -907,6 +1075,28 @@ function chatExecTool(name,args){
       const res=applyFeatureChanges(f,args.changes||{});
       pushHist();syncSel();rebuild();
       return{id:f.id,applied:res.applied,rejected:res.rejected};
+    }
+    case 'add_text3d':{
+      const f=newFeature('text3d');
+      f.text=String(args.text||'ABC').slice(0,80);
+      if(args.font)f.font=String(args.font).slice(0,60);
+      if(args.name)f.name=String(args.name);else f.name='Text "'+f.text.slice(0,12)+'"';
+      if(args.color&&/^#[0-9a-fA-F]{6}$/.test(args.color))f.color=args.color;
+      const res=applyFeatureChanges(f,Object.assign({},{size:args.size,depth:args.depth},args.position||{},args.rotation||{}));
+      APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
+      return{id:f.id,name:f.name,applied:res.applied};
+    }
+    case 'add_extruded_polygon':{
+      let pts=args.preset?presetProfile(args.preset,{width:args.width,points:args.points_count||args.n,inner:args.inner})
+        :(args.points||[]).filter(p=>Array.isArray(p)&&isFinite(+p[0])&&isFinite(+p[1])).map(p=>[+p[0],+p[1]]).slice(0,400);
+      if(!pts||pts.length<3)return{error:args.preset?'unknown preset '+args.preset:'need preset OR at least 3 valid [x,y] points'};
+      const f=newFeature('polyx');f.pts=pts;
+      if(args.preset&&!args.name)f.name=args.preset.charAt(0).toUpperCase()+args.preset.slice(1);
+      if(args.name)f.name=String(args.name);
+      if(args.color&&/^#[0-9a-fA-F]{6}$/.test(args.color))f.color=args.color;
+      const res=applyFeatureChanges(f,Object.assign({},{dist:args.depth},args.position||{},args.rotation||{}));
+      APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
+      return{id:f.id,name:f.name,points:pts.length,applied:res.applied};
     }
     case 'duplicate_feature':{
       const f=find(args.id);if(!f)return{error:'no feature '+args.id};
@@ -1004,6 +1194,7 @@ Ground rules:
 - Call get_scene FIRST whenever the user refers to existing geometry ("that box", "the plate", "the hole") — resolve references by name, type, selection and world_bbox.
 - Think in real coordinates: "on top of X touching the back-left corner" means compute exact centers from X's world_bbox and the new body's dims so faces/edges actually touch (no gaps, no overlaps unless asked).
 - To cut holes: add the cutting body (e.g. cylinder through the part), then boolean_op subtract with the part as a_id.
+- 3D text: use add_text3d (solid letters, any font). Hearts/stars: use add_extruded_polygon with preset:"heart"/"star" — NEVER hand-write long coordinate lists for these. Other custom outlines: points list, ≤40 points. Both stand facing +Z; rotate rx:-90 to lay flat / emboss onto a top face.
 - Prefer editing existing features over deleting and recreating. Keep edits minimal.
 - After building something, set_view fit sparingly (only when you created things off-screen).
 - Every change is applied to the user's real timeline and is undoable; briefly say WHAT you did, not tool names. Use mm. Be concise.`;
@@ -1036,7 +1227,7 @@ Ground rules:
       return res.json();
     }
     // Gemini: translate history, call generateContent, normalize to Anthropic-style blocks
-    const body={system_instruction:{parts:[{text:SYS}]},contents:toGeminiContents(history,toolNames),tools:geminiToolDecls(CHAT_TOOLS)};
+    const body={system_instruction:{parts:[{text:SYS}]},contents:toGeminiContents(history,toolNames),tools:geminiToolDecls(CHAT_TOOLS),generationConfig:{temperature:0.4}};
     const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelSel.value}:generateContent?key=${encodeURIComponent(key)}`,
       {method:'POST',signal:ctrl.signal,headers:{'content-type':'application/json'},body:JSON.stringify(body)});
     const j=await res.json();
@@ -1058,8 +1249,23 @@ Ground rules:
     if(history.length>40)history=history.slice(-30); // keep context bounded
     setBusy(true);ctrl=new AbortController();
     try{
+      let malformedRetries=0;
       for(let round=0;round<12;round++){
-        const r=await callLLM();
+        let r;
+        try{r=await callLLM();}
+        catch(e){
+          // Gemini occasionally garbles long tool calls — nudge it to retry
+          // simpler (e.g. presets / fewer points) instead of giving up.
+          if(/MALFORMED_FUNCTION_CALL/.test(String(e))&&malformedRetries++<2){
+            const last=history[history.length-1];
+            const note='(Your previous function call was malformed and was discarded. Retry with a simpler call — use preset:"heart"/"star" where possible and keep point lists short.)';
+            if(last&&last.role==='user'&&Array.isArray(last.content))last.content.push({type:'text',text:note});
+            else history.push({role:'user',content:note});
+            chip('retrying after malformed call');
+            continue;
+          }
+          throw e;
+        }
         history.push({role:'assistant',content:r.content,_graw:r._graw});
         const toolUses=r.content.filter(b=>b.type==='tool_use');
         r.content.filter(b=>b.type==='text'&&b.text.trim()).forEach(b=>add('ai',b.text));

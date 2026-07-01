@@ -5,8 +5,24 @@ const { loadFunctions } = require('./extract');
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? (pass++, console.log('  ✅', m)) : (fail++, console.log('  ❌', m)); };
 
-const { applyFeatureChanges, chatSceneSummary } =
-  loadFunctions('cad-studio.html', ['applyFeatureChanges', 'chatSceneSummary']);
+const { applyFeatureChanges, chatSceneSummary, presetProfile } =
+  loadFunctions('cad-studio.html', ['applyFeatureChanges', 'chatSceneSummary', 'presetProfile']);
+
+// ---------- presetProfile ----------
+const heart = presetProfile('heart', { width: 40 });
+ok(heart.length === 48, 'heart: default 48 points');
+let mnx = Math.min(...heart.map(p => p[0])), mxx = Math.max(...heart.map(p => p[0]));
+ok(Math.abs((mxx - mnx) - 40) < 1e-9, 'heart: width normalized to 40mm');
+ok(Math.abs(mnx + mxx) < 1e-9, 'heart: centered on x');
+// signed area > 0 => counter-clockwise (required by the extruder)
+let a = 0; heart.forEach((p, i) => { const q = heart[(i + 1) % heart.length]; a += p[0] * q[1] - q[0] * p[1]; });
+ok(a > 0, 'heart: counter-clockwise winding');
+
+const star = presetProfile('star', { width: 30, points: 6, inner: 0.5 });
+ok(star.length === 12, 'star: 6 points → 12 vertices');
+const radii = star.map(p => Math.hypot(p[0], p[1]));
+ok(Math.abs(Math.max(...radii) - 15) < 1e-9 && Math.abs(Math.min(...radii) - 7.5) < 1e-9, 'star: outer/inner radii exact');
+ok(presetProfile('blob') === null, 'unknown preset → null');
 
 // ---------- applyFeatureChanges ----------
 let f = { id: 1, type: 'box', name: 'Plate', color: '#f0803c', w: 80, d: 50, h: 8, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, visible: true, suppressed: false };
