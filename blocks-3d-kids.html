@@ -240,10 +240,13 @@ function pick(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera
 function rayToPlane(e){const ray=new THREE.Raycaster();ray.setFromCamera(ndc(e),camera);const pt=new THREE.Vector3();ray.ray.intersectPlane(plane0,pt);return pt||new THREE.Vector3();}
 
 /* ---------- history ---------- */
+/* History = timeline of committed states; hist[hp] === current scene.
+   The pre-state of any action is already in the timeline (committed by the
+   previous action), so completed actions just commit the post state. */
 function snapshot(){return JSON.stringify({objs:APP.objs,_id:APP._id});}
-function beginHist(){APP._pre=snapshot();}
-function pushHist(){const s=APP._pre||snapshot();APP._pre=null;APP.hist=APP.hist.slice(0,APP.hp+1);APP.hist.push(s);if(APP.hist.length>80)APP.hist.shift();APP.hp=APP.hist.length-1;APP.hist.push(snapshot());APP.hp++;}
-function commit(){APP.hist=APP.hist.slice(0,APP.hp+1);APP.hist.push(snapshot());if(APP.hist.length>80)APP.hist.shift();APP.hp=APP.hist.length-1;}
+function beginHist(){} /* retired — timeline already holds the pre-state */
+function pushHist(){commit();}
+function commit(){const s=snapshot();if(s===APP.hist[APP.hp])return;APP.hist=APP.hist.slice(0,APP.hp+1);APP.hist.push(s);if(APP.hist.length>80)APP.hist.shift();APP.hp=APP.hist.length-1;}
 function restore(s){const d=JSON.parse(s);APP.objs=d.objs;APP._id=d._id;APP.sel.clear();syncSel();rebuild();}
 function undo(){if(APP.hp>0){APP.hp--;restore(APP.hist[APP.hp]);toast('↩️ Undo');}else toast('Nothing to undo');}
 function redo(){if(APP.hp<APP.hist.length-1){APP.hp++;restore(APP.hist[APP.hp]);toast('↪️ Redo');}}

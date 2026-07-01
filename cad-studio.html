@@ -108,10 +108,13 @@
       <button class="btn" id="opInt" title="Intersect">◑ Intersect</button>
     </div>
     <div class="g">
+      <button class="btn" id="mUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button class="btn" id="mRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
       <button class="btn" id="mDup">⧉ Duplicate</button>
       <button class="btn" id="mDel">🗑 Delete</button>
       <button class="btn" id="mMeasure">📏 Measure</button>
       <button class="btn" id="mSection">✂ Section</button>
+      <button class="btn" id="mInspect" title="Mass properties (volume, area, centroid, mass)">🔍 Inspect</button>
     </div>
     <div style="flex:1"></div>
     <div class="g" style="border:none">
@@ -423,7 +426,7 @@ function renderTree(){
     const consumed=isConsumed(f.id);
     const d=document.createElement('div');d.className='feat'+(APP.sel.has(f.id)?' sel':'')+(f.suppressed?' suppressed':'')+(consumed?' consumed':'');
     d.innerHTML=`<span class="ic">${icon(f.type)}</span><span class="sw" style="background:${f.color}"></span><span class="nm">${f.name}</span><span class="eye" title="Show/hide">${f.visible?'👁':'🚫'}</span>`;
-    d.addEventListener('click',ev=>{if(ev.target.classList.contains('eye')){f.visible=!f.visible;rebuild();return;}if(ev.metaKey||ev.ctrlKey){APP.sel.has(f.id)?APP.sel.delete(f.id):APP.sel.add(f.id);}else APP.sel=new Set([f.id]);syncSel();rebuild();});
+    d.addEventListener('click',ev=>{if(ev.target.classList.contains('eye')){f.visible=!f.visible;pushHist();rebuild();return;}if(ev.metaKey||ev.ctrlKey){APP.sel.has(f.id)?APP.sel.delete(f.id):APP.sel.add(f.id);}else APP.sel=new Set([f.id]);syncSel();rebuild();});
     el.appendChild(d);
   });
 }
@@ -453,28 +456,41 @@ function renderProps(){
   else if(f.type==='boolean'){h+=`<div class="hint">Operation: <b>${f.op}</b>. Edit the inputs above it in the timeline.</div>`;}
   if(f.type!=='boolean')h+=`<div class="hint">Position &amp; rotation</div>`+g(NUM('X','x',f)+NUM('Y','y',f)+NUM('Z','z',f))+g(NUM('Rot X','rx',f)+NUM('Rot Y','ry',f)+NUM('Rot Z','rz',f));
   box.innerHTML=h;
-  box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else f[k]=evalNum(v,f[k]);rebuild();});});
+  box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else f[k]=evalNum(v,f[k]);pushHist();rebuild();});});
   // appearance
   ap.innerHTML=`<div class="row"><label>Color</label><input type="color" data-a="color" value="${f.color}"></div>
     <div class="row"><label>Opacity</label><input type="range" min="0.15" max="1" step="0.05" data-a="opacity" value="${f.opacity!=null?f.opacity:1}"></div>
     <div class="row"><label>Visible</label><input type="checkbox" data-a="visible" ${f.visible?'checked':''}></div>`;
-  ap.querySelector('[data-a=color]').addEventListener('input',e=>{f.color=e.target.value;rebuild();});
-  ap.querySelector('[data-a=opacity]').addEventListener('input',e=>{f.opacity=+e.target.value;rebuild();});
-  ap.querySelector('[data-a=visible]').addEventListener('change',e=>{f.visible=e.target.checked;rebuild();});
+  ap.querySelector('[data-a=color]').addEventListener('input',e=>{f.color=e.target.value;pushHist();rebuild();});
+  ap.querySelector('[data-a=opacity]').addEventListener('input',e=>{f.opacity=+e.target.value;pushHist();rebuild();});
+  ap.querySelector('[data-a=visible]').addEventListener('change',e=>{f.visible=e.target.checked;pushHist();rebuild();});
 }
 function evalNum(str,fallback){try{const keys=Object.keys(APP.params);const vals=keys.map(k=>APP.params[k]);const fn=new Function(...keys,'return ('+str+')');const v=fn(...vals);return isFinite(v)?v:fallback;}catch(_){const n=parseFloat(str);return isFinite(n)?n:fallback;}}
 
 function renderParams(){const el=$('#paramList');el.innerHTML='';Object.keys(APP.params).forEach(k=>{const row=document.createElement('div');row.className='paramrow';row.innerHTML=`<input value="${k}" data-pk><input value="${APP.params[k]}" data-pv style="width:70px"><button class="btn" data-pd>✕</button>`;
-  row.querySelector('[data-pk]').addEventListener('change',e=>{const nv=e.target.value.trim();if(nv&&nv!==k){APP.params[nv]=APP.params[k];delete APP.params[k];renderParams();rebuild();}});
-  row.querySelector('[data-pv]').addEventListener('change',e=>{APP.params[k]=parseFloat(e.target.value)||0;rebuild();});
-  row.querySelector('[data-pd]').addEventListener('click',()=>{delete APP.params[k];renderParams();rebuild();});
+  row.querySelector('[data-pk]').addEventListener('change',e=>{const nv=e.target.value.trim();if(nv&&nv!==k){APP.params[nv]=APP.params[k];delete APP.params[k];pushHist();renderParams();rebuild();}});
+  row.querySelector('[data-pv]').addEventListener('change',e=>{APP.params[k]=parseFloat(e.target.value)||0;pushHist();rebuild();});
+  row.querySelector('[data-pd]').addEventListener('click',()=>{delete APP.params[k];pushHist();renderParams();rebuild();});
   el.appendChild(row);});}
-$('#addParam').onclick=()=>{let i=1;while(APP.params['var'+i])i++;APP.params['var'+i]=10;renderParams();};
+$('#addParam').onclick=()=>{let i=1;while(APP.params['var'+i])i++;APP.params['var'+i]=10;pushHist();renderParams();};
 
 function syncSel(){$('#stSel').textContent=APP.sel.size?[...APP.sel].map(id=>{const f=APP.features.find(x=>x.id===id);return f?f.name:'';}).join(', '):'—';renderProps();}
 
+/* ===================== History (undo/redo) =====================
+   Timeline of committed states; history[hist] === current model.
+   pushHist() defers its snapshot to a macrotask so it can be called
+   anywhere inside a mutating handler and still capture the POST state. */
+APP.history=[];APP.hist=-1;
+function serializeModel(){return JSON.stringify({features:APP.features,params:APP.params,_id:APP._id});}
+function commitHist(sn){if(sn===APP.history[APP.hist])return;APP.history=APP.history.slice(0,APP.hist+1);APP.history.push(sn);if(APP.history.length>80)APP.history.shift();APP.hist=APP.history.length-1;}
+function pushHist(){if(APP._histQ)return;APP._histQ=true;setTimeout(()=>{APP._histQ=false;commitHist(serializeModel());},0);}
+function restoreModel(sn){const d=JSON.parse(sn);APP.features=d.features;APP.params=d.params;APP._id=d._id;APP.sel.clear();renderParams();syncSel();rebuild();}
+function undo(){if(APP.hist>0){APP.hist--;restoreModel(APP.history[APP.hist]);toast('Undo');}}
+function redo(){if(APP.hist<APP.history.length-1){APP.hist++;restoreModel(APP.history[APP.hist]);toast('Redo');}}
+$('#mUndo').onclick=undo;$('#mRedo').onclick=redo;
+
 /* ===================== Actions ===================== */
-function addFeature(kind){const f=newFeature(kind);APP.features.push(f);APP.sel=new Set([f.id]);syncSel();rebuild();toast('Added '+f.name);if(APP._bbox&&APP.features.length===1)fitView();}
+function addFeature(kind){const f=newFeature(kind);APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();toast('Added '+f.name);if(APP._bbox&&APP.features.length===1)fitView();}
 document.querySelectorAll('[data-add]').forEach(b=>b.addEventListener('click',()=>{addFeature(b.dataset.add);closeMenus();}));
 
 function boolean(op){const bodies=[...APP.sel].filter(id=>{const f=APP.features.find(x=>x.id===id);return f&&f.type!=='boolean'||APP.features.find(x=>x.id===id);});
@@ -483,14 +499,14 @@ function boolean(op){const bodies=[...APP.sel].filter(id=>{const f=APP.features.
   if(live.length<2){toast('Select two bodies first (Ctrl/Cmd-click in the tree or Shift-click in 3D)');return;}
   const [aId,bId]=live.slice(0,2);
   const f={id:uid(),type:'boolean',op,name:(op==='union'?'Combine':op==='subtract'?'Cut':'Intersect'),color:APP.features.find(x=>x.id===aId).color,visible:true,suppressed:false,aId,bId};
-  APP.features.push(f);APP.sel=new Set([f.id]);syncSel();rebuild();toast(f.name+' done');}
+  APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();toast(f.name+' done');}
 $('#opUnion').onclick=()=>boolean('union');$('#opSub').onclick=()=>boolean('subtract');$('#opInt').onclick=()=>boolean('intersect');
 
 $('#mDel').onclick=()=>{if(!APP.sel.size)return;APP.features=APP.features.filter(f=>!APP.sel.has(f.id));
   // also drop booleans referencing deleted inputs
   const ids=new Set(APP.features.map(f=>f.id));APP.features=APP.features.filter(f=>f.type!=='boolean'||(ids.has(f.aId)&&ids.has(f.bId)));
-  APP.sel.clear();syncSel();rebuild();toast('Deleted');};
-$('#mDup').onclick=()=>{const sel=[...APP.sel];if(!sel.length)return;const ns=[];sel.forEach(id=>{const f=APP.features.find(x=>x.id===id);if(!f||f.type==='boolean')return;const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' copy';c.x+=10;c.z+=10;APP.features.push(c);ns.push(c.id);});if(ns.length){APP.sel=new Set(ns);syncSel();rebuild();toast('Duplicated');}};
+  APP.sel.clear();pushHist();syncSel();rebuild();toast('Deleted');};
+$('#mDup').onclick=()=>{const sel=[...APP.sel];if(!sel.length)return;const ns=[];sel.forEach(id=>{const f=APP.features.find(x=>x.id===id);if(!f||f.type==='boolean')return;const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' copy';c.x+=10;c.z+=10;APP.features.push(c);ns.push(c.id);});if(ns.length){APP.sel=new Set(ns);pushHist();syncSel();rebuild();toast('Duplicated');}};
 
 /* view */
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
@@ -526,14 +542,14 @@ function download(name,data,mime){const b=new Blob([data],{type:mime});const u=U
 /* save / open / new */
 $('#mSave').onclick=()=>{download('model.mkc',JSON.stringify({v:1,features:APP.features,params:APP.params},null,0),'application/json');toast('Saved');};
 $('#mOpen').onclick=()=>$('#fileIn').click();
-$('#mNew').onclick=()=>{if(APP.features.length&&!confirm('Start a new model? Unsaved work is lost.'))return;APP.features=[];APP.params={wall:3};APP.sel.clear();APP._id=1;renderParams();syncSel();rebuild();fitView();toast('New model');};
-$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);APP.features=d.features||[];APP.params=d.params||{wall:3};APP._id=Math.max(1,...APP.features.map(x=>x.id))+1;APP.sel.clear();renderParams();syncSel();rebuild();fitView();toast('Opened '+f.name);}catch(_){toast('Could not read file');}};r.readAsText(f);e.target.value='';});
+$('#mNew').onclick=()=>{if(APP.features.length&&!confirm('Start a new model? Unsaved work is lost.'))return;APP.features=[];APP.params={wall:3};APP.sel.clear();APP._id=1;pushHist();renderParams();syncSel();rebuild();fitView();toast('New model');};
+$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);APP.features=d.features||[];APP.params=d.params||{wall:3};APP._id=Math.max(1,...APP.features.map(x=>x.id))+1;APP.sel.clear();pushHist();renderParams();syncSel();rebuild();fitView();toast('Opened '+f.name);}catch(_){toast('Could not read file');}};r.readAsText(f);e.target.value='';});
 
 /* toast */
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1700);}
 
 /* keyboard */
-window.addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#mDel').click();}if(k==='f')fitView();if(k==='d'&&!e.ctrlKey&&!e.metaKey)$('#mDup').click();if((e.ctrlKey||e.metaKey)&&k==='s'){e.preventDefault();$('#mSave').click();}});
+window.addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName))return;const k=e.key.toLowerCase();if(k==='delete'||k==='backspace'){e.preventDefault();$('#mDel').click();}if(k==='f')fitView();if(k==='d'&&!e.ctrlKey&&!e.metaKey)$('#mDup').click();if((e.ctrlKey||e.metaKey)&&k==='s'){e.preventDefault();$('#mSave').click();}if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();}if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();redo();}});
 
 /* boot */
 function boot(){
@@ -545,6 +561,7 @@ function boot(){
   const cut={id:uid(),type:'boolean',op:'subtract',name:'Cut hole',color:plate.color,visible:true,suppressed:false,aId:plate.id,bId:h1.id};
   APP.features.push(cut);
   rebuild();fitView();
+  commitHist(serializeModel()); // history baseline
   setTimeout(onResize,50);
 }
 boot();
