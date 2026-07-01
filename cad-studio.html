@@ -263,14 +263,16 @@
     <button class="btn" id="chatClose" aria-label="Close AI panel">✕</button>
   </header>
   <div class="setup" id="chatSetup">
-    <label for="chatKey">Anthropic API key (stored only in this browser)</label>
-    <input type="password" id="chatKey" placeholder="sk-ant-…" autocomplete="off">
     <label for="chatModel">Model</label>
     <select id="chatModel">
-      <option value="claude-sonnet-5" selected>Claude Sonnet 5 (recommended)</option>
-      <option value="claude-fable-5">Claude Fable 5 (most capable)</option>
-      <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fastest)</option>
+      <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (recommended)</option>
+      <option value="gemini-2.5-pro">Gemini 2.5 Pro (most capable)</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5</option>
+      <option value="claude-fable-5">Claude Fable 5</option>
+      <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
     </select>
+    <label for="chatKey" id="chatKeyLabel">API key (stored only in this browser)</label>
+    <input type="password" id="chatKey" placeholder="API key…" autocomplete="off">
   </div>
   <div class="chatmsgs" id="chatMsgs" aria-live="polite">
     <div class="cmsg ai">Hi! I can see and edit the model. Try:
@@ -800,6 +802,7 @@ boot();
   }
 })();
 </script>
+<script src="local-keys.js" onerror="/* optional gitignored key file — absent is fine */"></script>
 <script>
 /* =====================================================================
    ✨ AI modeling copilot — natural-language modeling via Claude tool use.
@@ -954,6 +957,43 @@ function chatExecTool(name,args){
   }
 }
 
+/* ---- Gemini adapter (pure translation helpers, unit-tested) ----
+   Internal chat history stays in Anthropic block format; these translate
+   per-request. Gemini 2.5 requires echoing thoughtSignature parts back in
+   tool loops, so raw model turns are stashed on the entry as _graw and
+   replayed verbatim. */
+function toGeminiSchema(s){
+  if(!s)return undefined;
+  const T={object:'OBJECT',string:'STRING',number:'NUMBER',integer:'INTEGER',boolean:'BOOLEAN',array:'ARRAY'};
+  const o={type:T[s.type]||'STRING'};
+  if(s.description)o.description=s.description;
+  if(s.enum)o.enum=s.enum;
+  if(s.properties){o.properties={};for(const k in s.properties)o.properties[k]=toGeminiSchema(s.properties[k]);if(s.required)o.required=s.required;}
+  if(s.items)o.items=toGeminiSchema(s.items);
+  return o;
+}
+function geminiToolDecls(tools){
+  return[{functionDeclarations:tools.map(t=>{
+    const d={name:t.name,description:t.description};
+    if(t.input_schema&&t.input_schema.properties&&Object.keys(t.input_schema.properties).length)
+      d.parameters=toGeminiSchema(t.input_schema);
+    return d;
+  })}];
+}
+function toGeminiContents(history,toolNames){
+  const parse=c=>{try{return JSON.parse(c);}catch(_){return{raw:String(c)};}};
+  return history.map(m=>{
+    if(m.role==='assistant'){
+      if(m._graw)return m._graw;
+      return{role:'model',parts:m.content.map(b=>b.type==='tool_use'?{functionCall:{name:b.name,args:b.input||{}}}:{text:b.text||''})};
+    }
+    if(typeof m.content==='string')return{role:'user',parts:[{text:m.content}]};
+    return{role:'user',parts:m.content.map(b=>b.type==='tool_result'
+      ?{functionResponse:{name:toolNames[b.tool_use_id]||'tool',response:{result:parse(b.content)}}}
+      :{text:String(b.text||'')})};
+  });
+}
+
 /* ---- agent loop + UI ---- */
 (function(){
   const $id=s=>document.getElementById(s);
@@ -968,35 +1008,64 @@ Ground rules:
 - After building something, set_view fit sparingly (only when you created things off-screen).
 - Every change is applied to the user's real timeline and is undoable; briefly say WHAT you did, not tool names. Use mm. Be concise.`;
   let history=[],busy=false,ctrl=null;
-  try{keyIn.value=localStorage.getItem('mkf_anthropic_key')||'';}catch(_){/* storage blocked */}
-  keyIn.addEventListener('change',()=>{try{localStorage.setItem('mkf_anthropic_key',keyIn.value.trim());}catch(_){}});
+  const toolNames={}; // tool_use id -> tool name (needed for Gemini functionResponse)
+  const provider=()=>modelSel.value.startsWith('gemini')?'gemini':'anthropic';
+  const storeKey=()=> 'mkf_'+provider()+'_key';
+  function loadKey(){
+    let v='';try{v=localStorage.getItem(storeKey())||'';}catch(_){/* storage blocked */}
+    if(!v&&window.MKF_KEYS&&window.MKF_KEYS[provider()])v=window.MKF_KEYS[provider()]; // optional gitignored local-keys.js
+    keyIn.value=v;
+    document.getElementById('chatKeyLabel').textContent=(provider()==='gemini'?'Google Gemini':'Anthropic')+' API key (stored only in this browser)';
+    keyIn.placeholder=provider()==='gemini'?'AIza…':'sk-ant-…';
+  }
+  loadKey();
+  modelSel.addEventListener('change',loadKey);
+  keyIn.addEventListener('change',()=>{try{localStorage.setItem(storeKey(),keyIn.value.trim());}catch(_){}});
   const add=(cls,text)=>{const d=document.createElement('div');d.className='cmsg '+cls;d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;};
   const chip=t=>{const d=document.createElement('div');d.className='ctool ok';d.textContent=t;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;};
   function setBusy(b){busy=b;think.classList.toggle('on',b);send.style.display=b?'none':'';stopB.style.display=b?'':'none';}
-  async function callClaude(){
+  let gid=0;
+  async function callLLM(){
     const key=keyIn.value.trim();
-    const body={model:modelSel.value,max_tokens:2048,system:SYS,tools:CHAT_TOOLS,messages:history};
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,
-      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify(body)});
-    if(!res.ok){const t=await res.text();throw new Error('API '+res.status+': '+t.slice(0,300));}
-    return res.json();
+    if(provider()==='anthropic'){
+      const body={model:modelSel.value,max_tokens:2048,system:SYS,tools:CHAT_TOOLS,messages:history.map(({_graw,...m})=>m)};
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,
+        headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify(body)});
+      if(!res.ok){const t=await res.text();throw new Error('API '+res.status+': '+t.slice(0,300));}
+      return res.json();
+    }
+    // Gemini: translate history, call generateContent, normalize to Anthropic-style blocks
+    const body={system_instruction:{parts:[{text:SYS}]},contents:toGeminiContents(history,toolNames),tools:geminiToolDecls(CHAT_TOOLS)};
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelSel.value}:generateContent?key=${encodeURIComponent(key)}`,
+      {method:'POST',signal:ctrl.signal,headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(j.error)throw new Error('Gemini API '+(j.error.code||res.status)+': '+String(j.error.message||'').slice(0,300));
+    const cand=(j.candidates||[])[0];
+    if(!cand||!cand.content)throw new Error('Gemini returned no candidates'+(cand&&cand.finishReason?' ('+cand.finishReason+')':''));
+    const content=(cand.content.parts||[]).map(p=>
+      p.functionCall?{type:'tool_use',id:'g'+(++gid),name:p.functionCall.name,input:p.functionCall.args||{}}
+      :{type:'text',text:p.text||''}).filter(b=>b.type==='tool_use'||b.text);
+    return{content,stop_reason:content.some(b=>b.type==='tool_use')?'tool_use':'end_turn',_graw:cand.content};
   }
   async function run(userText){
     if(busy)return;
-    if(!keyIn.value.trim()){add('err','Add your Anthropic API key above first (console.anthropic.com → API keys). It never leaves this browser except to call the API.');keyIn.focus();return;}
+    if(!keyIn.value.trim()){add('err',provider()==='gemini'
+      ?'Add your Google Gemini API key above first (aistudio.google.com → Get API key). It never leaves this browser except to call the API.'
+      :'Add your Anthropic API key above first (console.anthropic.com → API keys). It never leaves this browser except to call the API.');keyIn.focus();return;}
     add('user',userText);
     history.push({role:'user',content:userText});
     if(history.length>40)history=history.slice(-30); // keep context bounded
     setBusy(true);ctrl=new AbortController();
     try{
       for(let round=0;round<12;round++){
-        const r=await callClaude();
-        history.push({role:'assistant',content:r.content});
+        const r=await callLLM();
+        history.push({role:'assistant',content:r.content,_graw:r._graw});
         const toolUses=r.content.filter(b=>b.type==='tool_use');
         r.content.filter(b=>b.type==='text'&&b.text.trim()).forEach(b=>add('ai',b.text));
         if(r.stop_reason!=='tool_use'||!toolUses.length)break;
         const results=toolUses.map(tu=>{
+          toolNames[tu.id]=tu.name;
           let out;try{out=chatExecTool(tu.name,tu.input||{});}catch(e){out={error:String(e)};}
           chip(tu.name+(tu.input&&tu.input.kind?' · '+tu.input.kind:tu.input&&tu.input.id!==undefined?' · #'+tu.input.id:''));
           return{type:'tool_result',tool_use_id:tu.id,content:JSON.stringify(out)};
