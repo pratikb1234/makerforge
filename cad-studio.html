@@ -145,6 +145,12 @@
           <button data-add="revolve" aria-label="Rectangle revolve">🔄 Rectangle → Revolve</button>
           <div class="sep"></div>
           <button data-add="text3d" aria-label="Solid 3D text">🔤 3D Text</button>
+          <div class="sep"></div>
+          <button data-add="wedge" aria-label="Wedge ramp">◺ Wedge</button>
+          <button data-add="pyramid" aria-label="Pyramid">🔻 Pyramid</button>
+          <button data-add="hemisphere" aria-label="Dome / hemisphere">🌗 Dome</button>
+          <button data-add="capsule" aria-label="Capsule pill">💊 Capsule</button>
+          <button data-add="tube" aria-label="Tube / pipe">⭕ Tube</button>
         </div>
       </div>
     </div>
@@ -355,8 +361,10 @@ function csgFromGeometry(geom,matrix){
   let g=geom.index?geom.toNonIndexed():geom;
   const pos=g.attributes.position.array;const polys=[];
   const nm=new THREE.Matrix3().getNormalMatrix(matrix||new THREE.Matrix4());
+  const flip=matrix&&matrix.determinant()<0; // mirror transform: un-invert winding
   for(let i=0;i<pos.length;i+=9){
     const p=[];for(let j=0;j<3;j++){const v=new THREE.Vector3(pos[i+j*3],pos[i+j*3+1],pos[i+j*3+2]);if(matrix)v.applyMatrix4(matrix);p.push(v);}
+    if(flip)p.reverse();
     const n=new THREE.Vector3().subVectors(p[1],p[0]).cross(new THREE.Vector3().subVectors(p[2],p[0]));
     if(n.lengthSq()<1e-14)continue;n.normalize();
     polys.push(new Poly(p.map(v=>new Vtx(new V3(v.x,v.y,v.z),new V3(n.x,n.y,n.z)))));
@@ -394,6 +402,11 @@ function newFeature(kind){
     revolve:{...base,type:'revolve',name:'Revolve',r0:8,w:14,h:30,angle:360,seg:64},
     text3d:{...base,type:'text3d',name:'3D Text',text:'ABC',size:20,depth:6,font:'sans-serif'},
     polyx:{...base,type:'polyx',name:'Profile',pts:[[0,15],[13,-9],[-13,-9]],dist:10},
+    wedge:{...base,type:'wedge',name:'Wedge',w:40,d:20,h:20},
+    pyramid:{...base,type:'pyramid',name:'Pyramid',w:40,d:40,h:30},
+    hemisphere:{...base,type:'hemisphere',name:'Dome',r:20,seg:32},
+    capsule:{...base,type:'capsule',name:'Capsule',r:10,h:30,seg:32},
+    tube:{...base,type:'tube',name:'Tube',ro:20,ri:14,h:30,seg:48},
   }[kind];
   return F;
 }
@@ -507,6 +520,52 @@ function presetProfile(name,opts){
     }
     return pts;
   }
+  const h=+opts.height>0?+opts.height:w*0.6;
+  const arc=(cx,cy,r,a0,a1,seg)=>{const p=[];for(let i=0;i<=seg;i++){const a=a0+(a1-a0)*i/seg;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}return p;};
+  if(name==='ellipse'||name==='oval'){
+    const pts=[];for(let i=0;i<48;i++){const a=Math.PI*2*i/48;pts.push([w/2*Math.cos(a),h/2*Math.sin(a)]);}return pts;
+  }
+  if(name==='rounded_rect'){
+    let r=+opts.radius>0?+opts.radius:Math.min(w,h)*0.2;r=Math.min(r,w/2-0.01,h/2-0.01);
+    return[...arc(w/2-r,-h/2+r,r,-Math.PI/2,0,6),...arc(w/2-r,h/2-r,r,0,Math.PI/2,6),
+           ...arc(-w/2+r,h/2-r,r,Math.PI/2,Math.PI,6),...arc(-w/2+r,-h/2+r,r,Math.PI,Math.PI*1.5,6)];
+  }
+  if(name==='slot'){ // stadium — the classic CAD slot
+    const r=Math.min(h,w)/2===h/2?h/2:w/2;const rr=Math.min(w,h)/2;const half=(Math.max(w,h))/2-rr;
+    const horiz=w>=h;
+    const c1=horiz?[half,0]:[0,half],c2=horiz?[-half,0]:[0,-half];
+    return horiz
+      ?[...arc(c1[0],c1[1],rr,-Math.PI/2,Math.PI/2,10),...arc(c2[0],c2[1],rr,Math.PI/2,Math.PI*1.5,10)]
+      :[...arc(c1[0],c1[1],rr,0,Math.PI,10),...arc(c2[0],c2[1],rr,Math.PI,Math.PI*2,10)];
+  }
+  if(name==='arch'){ // flat bottom, semicircular top
+    const r=w/2,wall=Math.max(0.01,h-r);
+    return[[ -w/2,-h/2],[w/2,-h/2],...arc(0,-h/2+wall,r,0,Math.PI,16)];
+  }
+  if(name==='arrow'){ // points up (+Y)
+    const hw=w/2,sh=w*0.22,hh=h*0.42;
+    return[[sh,-h/2],[sh,h/2-hh],[hw,h/2-hh],[0,h/2],[-hw,h/2-hh],[-sh,h/2-hh],[-sh,-h/2]];
+  }
+  if(name==='cross'){ // plus sign
+    const t=(+opts.thickness>0?+opts.thickness:w*0.34)/2,a=w/2;
+    return[[t,-a],[t,-t],[a,-t],[a,t],[t,t],[t,a],[-t,a],[-t,t],[-a,t],[-a,-t],[-t,-t],[-t,-a]];
+  }
+  if(name==='lbracket'||name==='l'){
+    const t=+opts.thickness>0?+opts.thickness:Math.min(w,h)*0.35;
+    return[[-w/2,-h/2],[w/2,-h/2],[w/2,-h/2+t],[-w/2+t,-h/2+t],[-w/2+t,h/2],[-w/2,h/2]];
+  }
+  if(name==='gear'){ // toy gear: trapezoid teeth on a root circle (no bore — cut one with a cylinder)
+    const n=+opts.teeth>=4?Math.min(60,+opts.teeth|0):12;
+    const R=w/2,root=R*0.78,pts=[];
+    for(let i=0;i<n;i++){
+      const a0=Math.PI*2*i/n,step=Math.PI*2/n;
+      pts.push([root*Math.cos(a0),root*Math.sin(a0)]);
+      pts.push([R*Math.cos(a0+step*0.18),R*Math.sin(a0+step*0.18)]);
+      pts.push([R*Math.cos(a0+step*0.42),R*Math.sin(a0+step*0.42)]);
+      pts.push([root*Math.cos(a0+step*0.6),root*Math.sin(a0+step*0.6)]);
+    }
+    return pts;
+  }
   return null;
 }
 /* Render f.text with the browser's font engine and vectorize it. Returns
@@ -579,11 +638,40 @@ function featureGeometry(f){
       g.translate(0,0,-depth/2);
     }
   }
+  else if(f.type==='wedge'){ // right-triangle ramp: w along X, h up, extruded d along Z
+    const sh=new THREE.Shape([new THREE.Vector2(-f.w/2,0),new THREE.Vector2(f.w/2,0),new THREE.Vector2(-f.w/2,f.h)].map(v=>v));
+    g=new THREE.ExtrudeGeometry(sh,{depth:f.d,bevelEnabled:false});
+    g.translate(0,-f.h/2,-f.d/2);
+  }
+  else if(f.type==='pyramid'){ // rectangular base w×d, apex height h, centered
+    g=new THREE.CylinderGeometry(0.0001,Math.SQRT1_2,1,4,1);
+    g.rotateY(Math.PI/4);g.scale(f.w,f.h,f.d);
+  }
+  else if(f.type==='hemisphere'){ // closed dome, flat base, centered
+    const seg=Math.max(8,f.seg|0),pts=[new THREE.Vector2(0,0),new THREE.Vector2(f.r,0)];
+    for(let i=1;i<=seg/2;i++){const a=Math.PI/2*i/(seg/2);pts.push(new THREE.Vector2(f.r*Math.cos(a),f.r*Math.sin(a)));}
+    g=new THREE.LatheGeometry(pts,seg);g.translate(0,-f.r/2,0);
+  }
+  else if(f.type==='capsule'){ // pill: cylinder r×h with hemispherical ends
+    const seg=Math.max(8,f.seg|0),q=seg/2,pts=[new THREE.Vector2(0,-f.h/2-f.r)];
+    for(let i=1;i<=q;i++){const a=-Math.PI/2+Math.PI/2*i/q;pts.push(new THREE.Vector2(f.r*Math.cos(a),-f.h/2+f.r*Math.sin(a)));}
+    for(let i=1;i<=q;i++){const a=Math.PI/2*i/q;pts.push(new THREE.Vector2(f.r*Math.cos(a),f.h/2+f.r*Math.sin(a)));}
+    g=new THREE.LatheGeometry(pts,seg);
+  }
+  else if(f.type==='tube'){ // pipe / washer: outer ro, bore ri, height h, centered
+    const ri=Math.min(Math.max(0.1,f.ri),f.ro-0.1);
+    const pts=[new THREE.Vector2(ri,-f.h/2),new THREE.Vector2(f.ro,-f.h/2),new THREE.Vector2(f.ro,f.h/2),new THREE.Vector2(ri,f.h/2),new THREE.Vector2(ri,-f.h/2)];
+    g=new THREE.LatheGeometry(pts,Math.max(8,f.seg|0));
+  }
   return g;
 }
 function featureMatrix(f){
-  const m=new THREE.Matrix4();const e=new THREE.Euler(f.rx*Math.PI/180,f.ry*Math.PI/180,f.rz*Math.PI/180);
-  m.makeRotationFromEuler(e);m.setPosition(f.x,f.y,f.z);return m;
+  const e=new THREE.Euler((f.rx||0)*Math.PI/180,(f.ry||0)*Math.PI/180,(f.rz||0)*Math.PI/180);
+  const m=new THREE.Matrix4();
+  m.compose(new THREE.Vector3(f.x||0,f.y||0,f.z||0),
+            new THREE.Quaternion().setFromEuler(e),
+            new THREE.Vector3(f.sx||1,f.sy||1,f.sz||1)); // per-axis scale: ellipsoids, stretching, mirroring (negative)
+  return m;
 }
 
 /* ===================== Rebuild (evaluate timeline) ===================== */
@@ -694,7 +782,7 @@ function applyClip(mat){if(APP.section){mat.clippingPlanes=[clipPlane];}else mat
 function updateClip(){const ax=$('#secAxis').value,pos=+$('#secPos').value,flip=$('#secFlip').checked?-1:1;const n=new THREE.Vector3(ax==='x'?1:0,ax==='y'?1:0,ax==='z'?1:0).multiplyScalar(-flip);clipPlane.normal.copy(n);clipPlane.constant=pos*flip;rebuild();}
 
 /* ===================== UI: tree, props, params ===================== */
-function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑',text3d:'🔤',polyx:'⬟'}[t]||'▪';}
+function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑',text3d:'🔤',polyx:'⬟',wedge:'◺',pyramid:'🔻',hemisphere:'🌗',capsule:'💊',tube:'⭕'}[t]||'▪';}
 function renderTree(){
   const el=$('#tree');
   if(!APP.features.length){el.innerHTML='<div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div>';return;}
@@ -732,8 +820,16 @@ function renderProps(){
   else if(f.type==='revolve')h+=g(NUM('Inner r','r0',f)+NUM('Wall','w',f)+NUM('Height','h',f))+g2(NUM('Angle°','angle',f)+NUM('Quality','seg',f));
   else if(f.type==='text3d')h+=`<div class="fld"><span>Text</span><input data-k="text" value="${String(f.text).replace(/"/g,'&quot;')}"></div>`+g(NUM('Size mm','size',f)+NUM('Depth','depth',f)+`<div class="fld"><span>Font</span><input data-k="font" value="${String(f.font||'sans-serif').replace(/"/g,'&quot;')}"></div>`);
   else if(f.type==='polyx')h+=g2(NUM('Depth','dist',f)+`<div class="fld"><span>Profile</span><input value="${(f.pts||[]).length} points" disabled></div>`)+`<div class="hint">Freeform profile (heart, star, …) — reshape it via the ✨ AI copilot.</div>`;
+  else if(f.type==='wedge')h+=g(NUM('Width X','w',f)+NUM('Depth Z','d',f)+NUM('Height Y','h',f));
+  else if(f.type==='pyramid')h+=g(NUM('Base X','w',f)+NUM('Base Z','d',f)+NUM('Height','h',f));
+  else if(f.type==='hemisphere')h+=g2(NUM('Radius','r',f)+NUM('Quality','seg',f));
+  else if(f.type==='capsule')h+=g(NUM('Radius','r',f)+NUM('Body h','h',f)+NUM('Quality','seg',f));
+  else if(f.type==='tube')h+=g(NUM('Outer r','ro',f)+NUM('Bore r','ri',f)+NUM('Height','h',f));
   else if(f.type==='boolean'){h+=`<div class="hint">Operation: <b>${f.op}</b>. Edit the inputs above it in the timeline.</div>`;}
-  if(f.type!=='boolean')h+=`<div class="hint">Position &amp; rotation</div>`+g(NUM('X','x',f)+NUM('Y','y',f)+NUM('Z','z',f))+g(NUM('Rot X','rx',f)+NUM('Rot Y','ry',f)+NUM('Rot Z','rz',f));
+  if(f.type!=='boolean'){
+    if(f.sx==null)f.sx=1;if(f.sy==null)f.sy=1;if(f.sz==null)f.sz=1;
+    h+=`<div class="hint">Position &amp; rotation</div>`+g(NUM('X','x',f)+NUM('Y','y',f)+NUM('Z','z',f))+g(NUM('Rot X','rx',f)+NUM('Rot Y','ry',f)+NUM('Rot Z','rz',f))+g(NUM('Scale X','sx',f)+NUM('Scale Y','sy',f)+NUM('Scale Z','sz',f));
+  }
   box.innerHTML=h;
   box.querySelectorAll('input,select').forEach(inp=>{inp.addEventListener('change',()=>{const k=inp.dataset.k;if(!k)return;let v=inp.value;if(k==='name')f.name=v;else if(k==='plane')f.plane=v;else if(k==='sym')f.sym=(v==='true');else if(k==='text'||k==='font')f[k]=v;else f[k]=evalNum(v,f[k]);pushHist();rebuild();});});
   // appearance
@@ -981,7 +1077,7 @@ boot();
 /* Whitelisted, type-coerced application of edits to a feature object.
    Returns {applied:{k:v}, rejected:[k]} and mutates f only for valid keys. */
 function applyFeatureChanges(f,changes){
-  const NUMERIC=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','x','y','z','rx','ry','rz','opacity','size','depth'];
+  const NUMERIC=['w','d','h','r','r1','r2','r0','ri','ro','tube','seg','n','dist','angle','x','y','z','rx','ry','rz','sx','sy','sz','opacity','size','depth'];
   const BOOL=['visible','suppressed','sym'];
   const applied={},rejected=[];
   for(const k in changes){
@@ -992,7 +1088,7 @@ function applyFeatureChanges(f,changes){
     else if(BOOL.includes(k)){f[k]=(v===true||v==='true');applied[k]=f[k];}
     else if(NUMERIC.includes(k)){
       const n=Number(v);
-      if(isFinite(n)&&(k in f||['x','y','z','rx','ry','rz'].includes(k))){f[k]=n;applied[k]=n;}
+      if(isFinite(n)&&(k in f||['x','y','z','rx','ry','rz','sx','sy','sz'].includes(k))){f[k]=n;applied[k]=n;}
       else rejected.push(k);
     }
     else rejected.push(k);
@@ -1002,7 +1098,7 @@ function applyFeatureChanges(f,changes){
 /* Compact scene description for the model. Pure: takes plain data.
    bboxMap: id -> {min:[x,y,z], max:[x,y,z]} world-space (only live bodies). */
 function chatSceneSummary(features,bboxMap,params,selIds){
-  const DIMS=['w','d','h','r','r1','r2','r0','tube','seg','n','dist','angle','profile','plane','sym','text','font','size','depth'];
+  const DIMS=['w','d','h','r','r1','r2','r0','ri','ro','tube','seg','n','dist','angle','profile','plane','sym','text','font','size','depth'];
   const consumedBy={};
   features.forEach(f=>{if(f.type==='boolean'&&!f.suppressed){consumedBy[f.aId]=f.id;consumedBy[f.bId]=f.id;}});
   const round=v=>Math.round(v*100)/100;
@@ -1015,6 +1111,7 @@ function chatSceneSummary(features,bboxMap,params,selIds){
       if(f.type==='polyx')dims.profile_points=(f.pts||[]).length;
       const out={id:f.id,name:f.name,type:f.type,color:f.color,visible:f.visible,suppressed:f.suppressed,dims,
         position:{x:f.x||0,y:f.y||0,z:f.z||0},rotation_deg:{rx:f.rx||0,ry:f.ry||0,rz:f.rz||0}};
+      if((f.sx&&f.sx!==1)||(f.sy&&f.sy!==1)||(f.sz&&f.sz!==1))out.scale={sx:f.sx||1,sy:f.sy||1,sz:f.sz||1};
       if(f.type==='boolean'){out.op=f.op;out.input_ids=[f.aId,f.bId];delete out.dims;delete out.position;delete out.rotation_deg;}
       if(consumedBy[f.id])out.consumed_by_boolean=consumedBy[f.id];
       const bb=bboxMap[f.id];
@@ -1029,15 +1126,18 @@ function chatSceneSummary(features,bboxMap,params,selIds){
 /* ---- tool belt ---- */
 const CHAT_TOOLS=[
  {name:'get_scene',description:'Read the full current scene: every timeline feature (id, name, type, dims, CENTER position in mm, rotation, color, visibility, boolean relationships) plus world-space bounding boxes of live bodies, the current selection and named parameters. Call this before editing anything you did not just create — ids and geometry may have changed.',input_schema:{type:'object',properties:{}}},
- {name:'add_body',description:'Add a primitive body to the timeline. position is the body CENTER in mm (Y up): a box of height h sitting on the ground needs position.y = h/2. Dims: box {w (X), d (Z), h (Y)}; cylinder {r,h} (axis Y); sphere {r}; cone {r1 bottom, r2 top, h}; torus {r ring, tube}. Returns the new feature id.',input_schema:{type:'object',properties:{
-   kind:{type:'string',enum:['box','cylinder','sphere','cone','torus']},
+ {name:'add_body',description:'Add a primitive body to the timeline. position is the body CENTER in mm (Y up): a body of height h sitting on the ground needs position.y = h/2. Dims per kind: box {w (X), d (Z), h (Y)}; cylinder {r,h} (axis Y); sphere {r}; cone {r1 bottom, r2 top — r2>0 makes a FRUSTUM / truncated cone, h}; torus (donut/ring) {r ring, tube}; wedge (ramp, right-triangle profile) {w,d,h}; pyramid (rectangular base) {w,d,h}; hemisphere (dome, flat base) {r}; capsule (pill/rounded rod) {r, h = straight section}; tube (pipe/washer/bushing) {ro outer, ri bore, h}. Combine with per-axis scale (sx,sy,sz via edit_feature) for ellipsoids, eggs, elliptical cones/cylinders, stretched shapes. Returns the new feature id.',input_schema:{type:'object',properties:{
+   kind:{type:'string',enum:['box','cylinder','sphere','cone','torus','wedge','pyramid','hemisphere','capsule','tube']},
    name:{type:'string'},color:{type:'string',description:'#rrggbb'},
    dims:{type:'object',description:'dimension overrides for the kind, in mm'},
    position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},
    rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}},description:'degrees'}},required:['kind']}},
- {name:'edit_feature',description:'Change properties of an existing feature by id: any dim (w,d,h,r,…; for 3D text also text/font/size/depth), position x/y/z (center, mm), rotation rx/ry/rz (deg), name, color, visible, suppressed. The model rebuilds automatically.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'edit_feature',description:'Change properties of an existing feature by id: any dim (w,d,h,r,ri,ro,…; for 3D text also text/font/size/depth), position x/y/z (center, mm), rotation rx/ry/rz (deg), per-axis scale sx/sy/sz (1=none; e.g. sphere + sy:1.4 = egg/ellipsoid, cylinder + sx:2 = elliptical), name, color, visible, suppressed. The model rebuilds automatically.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'mirror_feature',description:'Mirror a feature across a plane perpendicular to axis at plane_position (mm, default 0). keep_original=true duplicates then mirrors the copy (symmetric pairs); false mirrors in place. Returns the affected id.',input_schema:{type:'object',properties:{id:{type:'integer'},axis:{type:'string',enum:['x','y','z']},plane_position:{type:'number'},keep_original:{type:'boolean'}},required:['id','axis']}},
+ {name:'pattern_linear',description:'Linear pattern: create count-1 copies of a feature spaced by dx/dy/dz mm. Returns the new ids.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},dx:{type:'number'},dy:{type:'number'},dz:{type:'number'}},required:['id','count']}},
+ {name:'pattern_circular',description:'Circular pattern about a vertical (Y) axis through (cx,cz): count-1 copies rotated evenly over total_angle degrees (default 360). Each copy is repositioned AND spun to match. Returns the new ids.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},cx:{type:'number'},cz:{type:'number'},total_angle:{type:'number'}},required:['id','count']}},
  {name:'add_text3d',description:'Add SOLID 3D text (real letter outlines with holes, extruded). size = capital-letter height in mm, depth = extrusion thickness in mm. The text stands upright facing +Z, centered at position; rotate rx:-90 to emboss it flat on a top face. Returns the new feature id.',input_schema:{type:'object',properties:{text:{type:'string'},size:{type:'number'},depth:{type:'number'},font:{type:'string',description:'CSS font family, default sans-serif'},name:{type:'string'},color:{type:'string'},position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}}}},required:['text']}},
- {name:'add_extruded_polygon',description:'Add an extruded profile — hearts, stars, arrows, brackets, any outline. PREFER preset for hearts/stars: preset:"heart" (width mm) or preset:"star" (width, points, inner 0–1) — generated locally, no coordinates needed. For other outlines pass points = [[x,y],…] in mm, counter-clockwise, XY plane (X right, Y up), ≤40 points. Profile is centered at position and extruded depth mm along Z (faces +Z; rotate rx:-90 to lay flat on the ground). Returns the new feature id.',input_schema:{type:'object',properties:{preset:{type:'string',enum:['heart','star']},width:{type:'number'},inner:{type:'number'},points:{type:'array',items:{type:'array',items:{type:'number'}}},depth:{type:'number'},name:{type:'string'},color:{type:'string'},position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}}}}}},
+ {name:'add_extruded_polygon',description:'Add an extruded 2D profile. PREFER a preset — generated locally, no coordinates needed: heart{width}, star{width,points,inner 0–1}, ellipse/oval{width,height}, rounded_rect{width,height,radius}, slot(stadium){width,height}, arch{width,height}, arrow{width,height, points +Y}, cross{width,thickness}, lbracket{width,height,thickness}, gear{width,teeth} (cut a bore with a cylinder). For anything else pass points = [[x,y],…] in mm, counter-clockwise, XY plane (X right, Y up), ≤40 points. Profile is centered at position and extruded depth mm along Z (faces +Z; rotate rx:-90 to lay flat on the ground). Returns the new feature id.',input_schema:{type:'object',properties:{preset:{type:'string',enum:['heart','star','ellipse','oval','rounded_rect','slot','arch','arrow','cross','lbracket','gear']},width:{type:'number'},height:{type:'number'},thickness:{type:'number'},radius:{type:'number'},teeth:{type:'integer'},inner:{type:'number'},points:{type:'array',items:{type:'array',items:{type:'number'}}},depth:{type:'number'},name:{type:'string'},color:{type:'string'},position:{type:'object',properties:{x:{type:'number'},y:{type:'number'},z:{type:'number'}}},rotation:{type:'object',properties:{rx:{type:'number'},ry:{type:'number'},rz:{type:'number'}}}}}},
  {name:'duplicate_feature',description:'Duplicate a (non-boolean) feature, offset by dx/dy/dz mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'},dz:{type:'number'}},required:['id']}},
  {name:'delete_features',description:'Delete features by id. Booleans referencing a deleted input are removed too.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'boolean_op',description:'Boolean two LIVE bodies (not already consumed): union (combine), subtract (cut b from a), intersect. Creates a new timeline feature; both inputs become consumed.',input_schema:{type:'object',properties:{op:{type:'string',enum:['union','subtract','intersect']},a_id:{type:'integer'},b_id:{type:'integer'}},required:['op','a_id','b_id']}},
@@ -1087,7 +1187,7 @@ function chatExecTool(name,args){
       return{id:f.id,name:f.name,applied:res.applied};
     }
     case 'add_extruded_polygon':{
-      let pts=args.preset?presetProfile(args.preset,{width:args.width,points:args.points_count||args.n,inner:args.inner})
+      let pts=args.preset?presetProfile(args.preset,{width:args.width,height:args.height,thickness:args.thickness,radius:args.radius,teeth:args.teeth,points:args.points_count||args.n,inner:args.inner})
         :(args.points||[]).filter(p=>Array.isArray(p)&&isFinite(+p[0])&&isFinite(+p[1])).map(p=>[+p[0],+p[1]]).slice(0,400);
       if(!pts||pts.length<3)return{error:args.preset?'unknown preset '+args.preset:'need preset OR at least 3 valid [x,y] points'};
       const f=newFeature('polyx');f.pts=pts;
@@ -1122,6 +1222,47 @@ function chatExecTool(name,args){
       const f={id:uid(),type:'boolean',op:args.op,name:(args.op==='union'?'Combine':args.op==='subtract'?'Cut':'Intersect'),color:a.color,visible:true,suppressed:false,aId:a.id,bId:b.id};
       APP.features.push(f);APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
       return{id:f.id,op:args.op};
+    }
+    case 'mirror_feature':{
+      let f=find(args.id);if(!f)return{error:'no feature '+args.id};
+      if(f.type==='boolean')return{error:'mirror the boolean inputs instead'};
+      if(args.keep_original){const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' mirror';APP.features.push(c);f=c;}
+      const ax=args.axis,p=+args.plane_position||0;
+      const sk='s'+ax;f[sk]=-(f[sk]||1);
+      f[ax]=2*p-(f[ax]||0);
+      APP.sel=new Set([f.id]);pushHist();syncSel();rebuild();
+      return{id:f.id,mirrored_axis:ax,plane:p};
+    }
+    case 'pattern_linear':{
+      const f=find(args.id);if(!f)return{error:'no feature '+args.id};
+      if(f.type==='boolean')return{error:'pattern the boolean result is not supported; pattern a body'};
+      const n=Math.min(50,Math.max(2,args.count|0));const ids=[];
+      for(let i=1;i<n;i++){
+        const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' '+(i+1);
+        c.x=(c.x||0)+(+args.dx||0)*i;c.y=(c.y||0)+(+args.dy||0)*i;c.z=(c.z||0)+(+args.dz||0)*i;
+        APP.features.push(c);ids.push(c.id);
+      }
+      APP.sel=new Set(ids);pushHist();syncSel();rebuild();
+      return{new_ids:ids};
+    }
+    case 'pattern_circular':{
+      const f=find(args.id);if(!f)return{error:'no feature '+args.id};
+      if(f.type==='boolean')return{error:'pattern a body, not a boolean'};
+      const n=Math.min(60,Math.max(2,args.count|0));
+      const cx=+args.cx||0,cz=+args.cz||0;
+      const total=(args.total_angle!=null&&isFinite(+args.total_angle))?+args.total_angle:360;
+      const step=(Math.abs(total-360)<1e-9?360/n:total/(n-1))*Math.PI/180;
+      const ids=[];
+      for(let i=1;i<n;i++){
+        const c=JSON.parse(JSON.stringify(f));c.id=uid();c.name=f.name+' '+(i+1);
+        const a=step*i,dx=(f.x||0)-cx,dz=(f.z||0)-cz;
+        c.x=cx+dx*Math.cos(a)+dz*Math.sin(a);
+        c.z=cz-dx*Math.sin(a)+dz*Math.cos(a);
+        c.ry=(f.ry||0)+a*180/Math.PI;
+        APP.features.push(c);ids.push(c.id);
+      }
+      APP.sel=new Set(ids);pushHist();syncSel();rebuild();
+      return{new_ids:ids};
     }
     case 'set_parameter':{
       if(!/^[a-zA-Z_]\w*$/.test(String(args.name)))return{error:'bad name'};
@@ -1194,7 +1335,10 @@ Ground rules:
 - Call get_scene FIRST whenever the user refers to existing geometry ("that box", "the plate", "the hole") — resolve references by name, type, selection and world_bbox.
 - Think in real coordinates: "on top of X touching the back-left corner" means compute exact centers from X's world_bbox and the new body's dims so faces/edges actually touch (no gaps, no overlaps unless asked).
 - To cut holes: add the cutting body (e.g. cylinder through the part), then boolean_op subtract with the part as a_id.
-- 3D text: use add_text3d (solid letters, any font). Hearts/stars: use add_extruded_polygon with preset:"heart"/"star" — NEVER hand-write long coordinate lists for these. Other custom outlines: points list, ≤40 points. Both stand facing +Z; rotate rx:-90 to lay flat / emboss onto a top face.
+- 3D text: use add_text3d (solid letters, any font). 2D outlines: use add_extruded_polygon presets (heart, star, ellipse/oval, rounded_rect, slot, arch, arrow, cross, lbracket, gear) — NEVER hand-write long coordinate lists when a preset fits. Custom outlines: points list, ≤40 points. Profiles stand facing +Z; rotate rx:-90 to lay flat.
+- Vocabulary → shapes: ball=sphere; dome/bowl=hemisphere; pill/lozenge/rounded rod=capsule; pipe/tube/washer/ring/bushing=tube; donut=torus; ramp/doorstop=wedge; frustum/truncated cone=cone with r2>0; rod/shaft/disc=cylinder; plate/slab/bar=box; egg/ellipsoid=sphere + scale (sy≈1.35); elliptical cone/cylinder=cone/cylinder + sx≠sz. Per-axis scale sx/sy/sz works on every body; negative scale via mirror_feature.
+- Repeats: pattern_linear (rows, stacks) and pattern_circular (bolt circles, spokes, petals around a center). Symmetry: mirror_feature keep_original:true.
+- No fillets/chamfers here (mesh CSG) — suggest the B-Rep OpenCascade tool for those.
 - Prefer editing existing features over deleting and recreating. Keep edits minimal.
 - After building something, set_view fit sparingly (only when you created things off-screen).
 - Every change is applied to the user's real timeline and is undoable; briefly say WHAT you did, not tool names. Use mm. Be concise.`;

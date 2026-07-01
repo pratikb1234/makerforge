@@ -24,6 +24,29 @@ const radii = star.map(p => Math.hypot(p[0], p[1]));
 ok(Math.abs(Math.max(...radii) - 15) < 1e-9 && Math.abs(Math.min(...radii) - 7.5) < 1e-9, 'star: outer/inner radii exact');
 ok(presetProfile('blob') === null, 'unknown preset → null');
 
+// area + CCW for the whole preset library
+const area = pts => { let s = 0; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; s += p[0] * q[1] - q[0] * p[1]; }); return s / 2; };
+const span = (pts, i) => Math.max(...pts.map(p => p[i])) - Math.min(...pts.map(p => p[i]));
+for (const [name, opts, expW, expH] of [
+  ['ellipse', { width: 40, height: 20 }, 40, 20],
+  ['rounded_rect', { width: 50, height: 30, radius: 8 }, 50, 30],
+  ['slot', { width: 40, height: 12 }, 40, 12],
+  ['arch', { width: 30, height: 40 }, 30, 40],
+  ['arrow', { width: 24, height: 40 }, 24, 40],
+  ['cross', { width: 30, thickness: 10 }, 30, 30],
+  ['lbracket', { width: 40, height: 40, thickness: 12 }, 40, 40],
+  ['gear', { width: 40, teeth: 10 }, null, null],
+]) {
+  const pts = presetProfile(name, opts);
+  ok(pts && pts.length >= 3, `${name}: generates ≥3 points`);
+  ok(area(pts) > 0, `${name}: counter-clockwise`);
+  if (expW) ok(Math.abs(span(pts, 0) - expW) < 0.5, `${name}: width ≈ ${expW} (got ${span(pts,0).toFixed(2)})`);
+  if (expH) ok(Math.abs(span(pts, 1) - expH) < 0.5, `${name}: height ≈ ${expH} (got ${span(pts,1).toFixed(2)})`);
+}
+const gearPts = presetProfile('gear', { width: 40, teeth: 10 });
+ok(gearPts.length === 40, 'gear: 10 teeth → 40 vertices');
+ok(Math.abs(Math.max(...gearPts.map(p => Math.hypot(p[0], p[1]))) - 20) < 1e-9, 'gear: tip radius = width/2');
+
 // ---------- applyFeatureChanges ----------
 let f = { id: 1, type: 'box', name: 'Plate', color: '#f0803c', w: 80, d: 50, h: 8, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, visible: true, suppressed: false };
 let r = applyFeatureChanges(f, { h: 18, x: 5 });
