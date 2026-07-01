@@ -213,6 +213,7 @@
     <div class="tb-group" style="border:none" role="toolbar" aria-label="Output">
       <button class="btn" id="btnExport"><svg class="ic" aria-hidden="true"><use href="#i-export"/></svg> Export ▾</button>
       <button class="btn go" id="btnRun"><svg class="ic" aria-hidden="true"><use href="#i-zap"/></svg> Send to Laser</button>
+      <button class="btn" id="btnChat" title="AI design copilot — describe what to draw or change" aria-label="AI design copilot" aria-expanded="false">✨ AI</button>
     </div>
   </div>
 
@@ -1384,6 +1385,406 @@ window.closeModal=closeModal;window.toast=toast;
       }
     }
   }catch(_){/* localStorage unavailable — skip the tour */}
+})();
+</script>
+
+<!-- ================= ✨ AI design copilot (2D laser) ================= -->
+<style>
+  .chatdock{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);background:var(--panel);border-left:1px solid var(--line2);z-index:90;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .18s ease;box-shadow:-12px 0 30px rgba(0,0,0,.35)}
+  .chatdock.open{transform:none}
+  .chatdock header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .chatdock header b{flex:1;font-size:13px}
+  .chatdock .setup{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+  .chatdock .setup label{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .chatdock .setup input,.chatdock .setup select{background:var(--panel2);border:1px solid var(--line2);border-radius:6px;color:var(--txt);padding:6px 8px;font:inherit}
+  .chatmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.55}
+  .cmsg{max-width:100%;white-space:pre-wrap;overflow-wrap:break-word;border-radius:10px;padding:8px 11px}
+  .cmsg.user{background:var(--panel2);border:1px solid var(--line2);align-self:flex-end}
+  .cmsg.ai{border:1px solid var(--line);align-self:flex-start}
+  .cmsg.err{border:1px solid var(--danger);color:var(--danger)}
+  .ctool{align-self:flex-start;font-size:11px;color:var(--mut);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:ui-monospace,monospace}
+  .ctool::before{content:'⚙ '}
+  .chatrow{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+  .chatrow textarea{flex:1;resize:none;min-height:38px;max-height:120px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font:inherit;font-size:12.5px}
+  .chatsug{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
+  .chatsug button{font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .cthink{padding:0 14px 6px;color:var(--mut);font-size:11.5px;display:none}
+  .cthink.on{display:block;animation:lcblink 1.2s ease infinite}
+  @keyframes lcblink{50%{opacity:.35}}
+</style>
+<aside class="chatdock" id="lcDock" role="complementary" aria-label="AI design copilot">
+  <header>
+    <b>✨ AI design copilot</b>
+    <button class="btn icon" id="lcClear" title="Clear conversation" aria-label="Clear conversation">🧹</button>
+    <button class="btn icon" id="lcClose" aria-label="Close AI panel">✕</button>
+  </header>
+  <div class="setup">
+    <label for="lcModel">Model</label>
+    <select id="lcModel">
+      <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (recommended)</option>
+      <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5</option>
+      <option value="claude-fable-5">Claude Fable 5</option>
+    </select>
+    <label for="lcKey" id="lcKeyLabel">API key (stored only in this browser)</label>
+    <input type="password" id="lcKey" placeholder="API key…" autocomplete="off">
+  </div>
+  <div class="chatmsgs" id="lcMsgs" aria-live="polite">
+    <div class="cmsg ai">Hi! I can see the bed and draw for the laser. Try:
+• "make a 60×40 name tag with rounded corners and engrave MIA on it"
+• "a 30mm heart pendant with a 3mm hanging hole"
+• "arrange 6 of those in a row, 5mm apart"
+Layers = laser jobs (Cut / Engrave / Score). Everything I do is undoable.</div>
+  </div>
+  <div class="cthink" id="lcThink">thinking…</div>
+  <div class="chatsug">
+    <button data-sug="Make a 60×40mm name tag with rounded corners on the Cut layer, engrave the name MIA centred on it, and add a 4mm hanging hole near the left edge.">name tag</button>
+    <button data-sug="Make a 30mm wide heart pendant with a 3mm hole near the top for a cord.">heart pendant</button>
+    <button data-sug="How long will this job take to cut?">estimate</button>
+  </div>
+  <div class="chatrow">
+    <textarea id="lcInput" rows="1" placeholder="Describe what to draw or change…" aria-label="Message the AI copilot"></textarea>
+    <button class="btn go" id="lcSend" aria-label="Send">➤</button>
+    <button class="btn" id="lcStop" aria-label="Stop" style="display:none">■</button>
+  </div>
+</aside>
+<script src="local-keys.js" onerror="/* optional gitignored key file */"></script>
+<script>
+/* Same architecture as the cad-studio copilot: an agentic tool-use loop
+   (Anthropic or Gemini) over the REAL laser engine — shapes land in S.objects
+   via the same pushHist/draw path as manual edits, so everything is undoable.
+   2D conventions the model must respect: mm, y grows DOWNWARD, origin = bed
+   top-left, stored x/y = object's top-left (tools accept CENTERS and convert). */
+
+/* ---- pure helpers (unit-tested in tests/laser-chat.test.js) ---- */
+function lcPresetProfile(name,opts){ // y-DOWN screen coords, centered, CCW-on-screen
+  opts=opts||{};const w=+opts.width>0?+opts.width:40;
+  const h=+opts.height>0?+opts.height:w*0.6;
+  const flip=pts=>pts.map(p=>[p[0],-p[1]]).reverse(); // y-up math → y-down screen
+  const arc=(cx,cy,r,a0,a1,seg)=>{const p=[];for(let i=0;i<=seg;i++){const a=a0+(a1-a0)*i/seg;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}return p;};
+  if(name==='heart'){
+    const seg=48,raw=[];
+    for(let i=0;i<seg;i++){const t=Math.PI*2*i/seg;
+      raw.push([16*Math.pow(Math.sin(t),3),13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]);}
+    let mnx=Infinity,mxx=-Infinity,mny=Infinity,mxy=-Infinity;
+    raw.forEach(p=>{mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1]);});
+    const s=w/(mxx-mnx),cx=(mnx+mxx)/2,cy=(mny+mxy)/2;
+    return flip(raw.map(p=>[(p[0]-cx)*s,(p[1]-cy)*s]));
+  }
+  if(name==='gear'){
+    const n=+opts.teeth>=4?Math.min(60,+opts.teeth|0):12;
+    const R=w/2,root=R*0.78,pts=[];
+    for(let i=0;i<n;i++){const a0=Math.PI*2*i/n,st=Math.PI*2/n;
+      pts.push([root*Math.cos(a0),root*Math.sin(a0)],
+        [R*Math.cos(a0+st*0.18),R*Math.sin(a0+st*0.18)],
+        [R*Math.cos(a0+st*0.42),R*Math.sin(a0+st*0.42)],
+        [root*Math.cos(a0+st*0.6),root*Math.sin(a0+st*0.6)]);}
+    return flip(pts);
+  }
+  if(name==='slot'){const rr=Math.min(w,h)/2,half=Math.max(w,h)/2-rr;const horiz=w>=h;
+    const c1=horiz?[half,0]:[0,half],c2=horiz?[-half,0]:[0,-half];
+    return flip(horiz?[...arc(c1[0],c1[1],rr,-Math.PI/2,Math.PI/2,10),...arc(c2[0],c2[1],rr,Math.PI/2,Math.PI*1.5,10)]
+      :[...arc(c1[0],c1[1],rr,0,Math.PI,10),...arc(c2[0],c2[1],rr,Math.PI,Math.PI*2,10)]);}
+  if(name==='arch'){const r=w/2,wall=Math.max(0.01,h-r);
+    return flip([[-w/2,-h/2],[w/2,-h/2],...arc(0,-h/2+wall,r,0,Math.PI,16)]);}
+  if(name==='arrow'){const hw=w/2,sh=w*0.22,hh=h*0.42;
+    return flip([[sh,-h/2],[sh,h/2-hh],[hw,h/2-hh],[0,h/2],[-hw,h/2-hh],[-sh,h/2-hh],[-sh,-h/2]]);}
+  if(name==='cross'){const t=(+opts.thickness>0?+opts.thickness:w*0.34)/2,a=w/2;
+    return flip([[t,-a],[t,-t],[a,-t],[a,t],[t,t],[t,a],[-t,a],[-t,t],[-a,t],[-a,-t],[-t,-t],[-t,-a]]);}
+  if(name==='lbracket'){const t=+opts.thickness>0?+opts.thickness:Math.min(w,h)*0.35;
+    return flip([[-w/2,-h/2],[w/2,-h/2],[w/2,-h/2+t],[-w/2+t,-h/2+t],[-w/2+t,h/2],[-w/2,h/2]]);}
+  return null;
+}
+/* Whitelisted 2D edits. Accepts cx/cy (center) and converts to top-left;
+   scaling w/h on a path rescales its points. Pure — mutates o for valid keys. */
+function lcApplyChanges(o,changes){
+  const NUMERIC=['x','y','w','h','rot','rad','sides','points5','inner','size'];
+  const applied={},rejected=[];
+  const num=v=>{const n=Number(v);return isFinite(n)?n:null;};
+  for(const k in changes){
+    const v=changes[k];
+    if(k==='text'&&'text' in o&&typeof v==='string'){o.text=v;applied.text=v;}
+    else if(k==='points'&&k==='points'&&o.pts&&Array.isArray(v)){/* replaced via add, not edit */rejected.push(k);}
+    else if(k==='cx'||k==='cy'){const n=num(v);if(n==null){rejected.push(k);continue;}
+      if(k==='cx')o.x=n-o.w/2;else o.y=n-o.h/2;applied[k]=n;}
+    else if(NUMERIC.includes(k)){
+      const n=num(v);
+      if(n==null||!(k in o||['x','y','w','h','rot'].includes(k))){rejected.push(k);continue;}
+      if((k==='w'||k==='h')&&o.pts&&o[k]>0){const f=n/o[k];o.pts=o.pts.map(p=>k==='w'?{x:p.x*f,y:p.y}:{x:p.x,y:p.y*f});}
+      o[k]=n;applied[k]=n;
+    }
+    else rejected.push(k);
+  }
+  return{applied,rejected};
+}
+
+/* ---- tool belt over the live document ---- */
+const LC_TOOLS=[
+ {name:'get_canvas',description:'Read the whole document: bed size (mm), the laser layers (name, mode cut/engrave/score, power %, speed mm/s, passes, color, visible) and every object (id, type, layer, x/y = TOP-LEFT in mm with y growing DOWNWARD, w/h, rotation deg about its center, world bbox, text for text objects, point count for paths) plus the current selection. Call before editing anything you did not just create.',input_schema:{type:'object',properties:{}}},
+ {name:'add_shape',description:'Add a shape. kind: rect {w,h, rad = corner radius}, ellipse {w,h}, polygon {w,h,sides}, star {w,h,points,inner 0–1}, text {text,size = letter height mm — engraved single-stroke font, real cut geometry}. position = the CENTER in mm (y DOWN from bed top-left). layer: "cut"|"engrave"|"score" or a layer name (default: active layer; outlines to cut out → cut, decoration/writing → engrave). Returns the id.',input_schema:{type:'object',properties:{kind:{type:'string',enum:['rect','ellipse','polygon','star','text']},w:{type:'number'},h:{type:'number'},rad:{type:'number'},sides:{type:'integer'},points:{type:'integer'},inner:{type:'number'},text:{type:'string'},size:{type:'number'},rotation:{type:'number'},position:{type:'object',properties:{cx:{type:'number'},cy:{type:'number'}}},layer:{type:'string'}},required:['kind']}},
+ {name:'add_path',description:'Add a closed or open outline path. PREFER preset: heart{width}, gear{width,teeth}, slot{width,height}, arch{width,height}, arrow{width,height}, cross{width,thickness}, lbracket{width,height,thickness} — generated locally. Otherwise points=[[x,y],…] in mm RELATIVE to the shape (y DOWN), ≤40 points. position = CENTER on the bed. A closed path on the cut layer INSIDE another cut shape is simply a hole — no boolean needed. Returns the id.',input_schema:{type:'object',properties:{preset:{type:'string',enum:['heart','gear','slot','arch','arrow','cross','lbracket']},width:{type:'number'},height:{type:'number'},thickness:{type:'number'},teeth:{type:'integer'},points:{type:'array',items:{type:'array',items:{type:'number'}}},closed:{type:'boolean'},rotation:{type:'number'},position:{type:'object',properties:{cx:{type:'number'},cy:{type:'number'}}},layer:{type:'string'}},}},
+ {name:'edit_object',description:'Edit an object by id. changes: cx/cy (center, converted for you) or x/y (top-left), w,h (paths rescale), rot (deg), rad, sides, points5, inner, size, text.',input_schema:{type:'object',properties:{id:{type:'integer'},changes:{type:'object'}},required:['id','changes']}},
+ {name:'delete_objects',description:'Delete objects by id.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
+ {name:'duplicate_object',description:'Duplicate an object offset by dx/dy mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'}},required:['id']}},
+ {name:'flip_object',description:'Mirror an object horizontally (dir "h") or vertically ("v") in place.',input_schema:{type:'object',properties:{id:{type:'integer'},dir:{type:'string',enum:['h','v']}},required:['id','dir']}},
+ {name:'assign_layer',description:'Move objects to a layer ("cut"/"engrave"/"score" or name).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},layer:{type:'string'}},required:['ids','layer']}},
+ {name:'set_layer',description:'Change laser settings of a layer: power (%), speed (mm/s), passes, visible.',input_schema:{type:'object',properties:{layer:{type:'string'},power:{type:'number'},speed:{type:'number'},passes:{type:'integer'},visible:{type:'boolean'}},required:['layer']}},
+ {name:'group_objects',description:'Group objects so they move together. Returns the group id.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
+ {name:'pattern_linear',description:'Create count-1 copies of an object spaced dx/dy mm apart.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},dx:{type:'number'},dy:{type:'number'}},required:['id','count']}},
+ {name:'pattern_circular',description:'Circular pattern: count-1 copies rotated evenly about bed point (cx,cy) over total_angle deg (default 360); copies also spin to match.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},cx:{type:'number'},cy:{type:'number'},total_angle:{type:'number'}},required:['id','count']}},
+ {name:'get_estimate',description:'The job estimate: total time, cut length, object count.',input_schema:{type:'object',properties:{}}},
+ {name:'select_objects',description:'Set the UI selection (highlights for the user).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
+ {name:'fit_view',description:'Fit the bed in the viewport.',input_schema:{type:'object',properties:{}}}
+];
+function lcLayer(spec){
+  if(spec==null)return S.layers[S.activeLayer];
+  const s=String(spec).toLowerCase();
+  return S.layers.find(l=>l.mode===s)||S.layers.find(l=>l.name.toLowerCase()===s)||S.layers[S.activeLayer];
+}
+function lcRefresh(){pushHist();renderLayers();syncPanels();estimate();draw();}
+function lcExec(name,args){
+  const find=id=>findObj(id);
+  switch(name){
+    case 'get_canvas':
+      return{units:'mm',y_axis:'down (origin = bed top-left)',bed:S.bed,
+        layers:S.layers.map(l=>({id:l.id,name:l.name,mode:l.mode,power:l.power,speed:l.speed,passes:l.passes,color:l.color,visible:l.visible})),
+        selected_ids:[...S.sel],
+        objects:S.objects.map(o=>{const b=bbox(o);const lay=layerOf(o.layer);
+          const out={id:o.id,type:o.type,layer:lay.name+' ('+lay.mode+')',x:+o.x.toFixed(2),y:+o.y.toFixed(2),w:+o.w.toFixed(2),h:+o.h.toFixed(2),rot:o.rot||0,
+            bbox:{x:+b.x.toFixed(2),y:+b.y.toFixed(2),w:+b.w.toFixed(2),h:+b.h.toFixed(2)}};
+          if(o.type==='text'){out.text=o.text;out.size=o.size;}
+          if(o.pts){out.path_points=o.pts.length;out.closed=!!o.closed;}
+          if(o.type==='group')out.children=o.children.length;
+          return out;})};
+    case 'add_shape':{
+      const kindMap={rect:'rect',ellipse:'ellipse',polygon:'poly',star:'star',text:'text'};
+      const kind=kindMap[args.kind];if(!kind)return{error:'unknown kind'};
+      const w=+args.w>0?+args.w:40,h=+args.h>0?+args.h:(kind==='text'?0:30);
+      const o=makeShape(kind,0,0,w,h);
+      o.layer=lcLayer(args.layer).id;
+      if(kind==='rect'&&args.rad!=null)o.rad=Math.max(0,+args.rad||0);
+      if(kind==='poly'&&args.sides)o.sides=Math.max(3,args.sides|0);
+      if(kind==='star'){if(args.points)o.points5=Math.max(3,args.points|0);if(args.inner>0&&args.inner<1)o.inner=+args.inner;}
+      if(kind==='text'){o.text=String(args.text||'TEXT').slice(0,80);o.size=+args.size>0?+args.size:14;
+        const v=vectorizeText(o.text,o.size);o.w=v.w;o.h=v.h;}
+      if(args.rotation)o.rot=+args.rotation||0;
+      const cx=args.position&&isFinite(+args.position.cx)?+args.position.cx:S.bed.w/2;
+      const cy=args.position&&isFinite(+args.position.cy)?+args.position.cy:S.bed.h/2;
+      o.x=cx-o.w/2;o.y=cy-o.h/2;
+      S.objects.push(o);S.sel=new Set([o.id]);lcRefresh();
+      return{id:o.id,x:o.x,y:o.y,w:o.w,h:o.h};
+    }
+    case 'add_path':{
+      let pts;
+      if(args.preset){
+        const raw=lcPresetProfile(args.preset,{width:args.width,height:args.height,thickness:args.thickness,teeth:args.teeth});
+        if(!raw)return{error:'unknown preset '+args.preset};
+        pts=raw.map(p=>({x:p[0],y:p[1]}));
+      }else{
+        pts=(args.points||[]).filter(p=>Array.isArray(p)&&isFinite(+p[0])&&isFinite(+p[1])).map(p=>({x:+p[0],y:+p[1]})).slice(0,400);
+        if(pts.length<2)return{error:'need preset OR ≥2 [x,y] points'};
+        if(pts.length<3&&args.closed!==false)return{error:'a closed path needs ≥3 points'};
+      }
+      const o=makeShape('pen',0,0,1,1);
+      o.pts=pts;o.closed=args.preset?true:(args.closed!==false);
+      o.layer=lcLayer(args.layer).id;
+      normalizeLine(o);
+      if(args.rotation)o.rot=+args.rotation||0;
+      const cx=args.position&&isFinite(+args.position.cx)?+args.position.cx:S.bed.w/2;
+      const cy=args.position&&isFinite(+args.position.cy)?+args.position.cy:S.bed.h/2;
+      o.x=cx-o.w/2;o.y=cy-o.h/2;
+      S.objects.push(o);S.sel=new Set([o.id]);lcRefresh();
+      return{id:o.id,x:o.x,y:o.y,w:+o.w.toFixed(2),h:+o.h.toFixed(2),points:o.pts.length,closed:o.closed,name:args.preset||'path'};
+    }
+    case 'edit_object':{
+      const o=find(args.id);if(!o)return{error:'no object '+args.id};
+      if(o.type==='group')return{error:'edit group children individually, or move via cx/cy on children'};
+      const res=lcApplyChanges(o,args.changes||{});
+      lcRefresh();return{id:o.id,applied:res.applied,rejected:res.rejected};
+    }
+    case 'delete_objects':{
+      const ids=new Set((args.ids||[]).map(Number));const n=S.objects.length;
+      S.objects=S.objects.filter(o=>!ids.has(o.id));
+      S.objects.forEach(o=>{if(o.type==='group')o.children=o.children.filter(c=>!ids.has(c.id));});
+      S.sel.clear();lcRefresh();return{deleted:n-S.objects.length};
+    }
+    case 'duplicate_object':{
+      const o=find(args.id);if(!o)return{error:'no object '+args.id};
+      const c=JSON.parse(JSON.stringify(o));reid(c);moveObj(c,+args.dx||S.grid,+args.dy||S.grid);
+      S.objects.push(c);S.sel=new Set([c.id]);lcRefresh();return{id:c.id};
+    }
+    case 'flip_object':{
+      const o=find(args.id);if(!o)return{error:'no object '+args.id};
+      S.sel=new Set([o.id]);flip(args.dir==='v'?'v':'h');lcRefresh();return{id:o.id,flipped:args.dir};
+    }
+    case 'assign_layer':{
+      const lay=lcLayer(args.layer);let n=0;
+      (args.ids||[]).forEach(id=>{const o=find(id);if(o){o.layer=lay.id;if(o.type==='group')o.children.forEach(c=>c.layer=lay.id);n++;}});
+      lcRefresh();return{moved:n,layer:lay.name};
+    }
+    case 'set_layer':{
+      const lay=lcLayer(args.layer);
+      if(args.power!=null)lay.power=Math.max(1,Math.min(100,+args.power));
+      if(args.speed!=null)lay.speed=Math.max(1,+args.speed);
+      if(args.passes!=null)lay.passes=Math.max(1,args.passes|0);
+      if(args.visible!=null)lay.visible=!!args.visible;
+      lcRefresh();return{layer:lay.name,power:lay.power,speed:lay.speed,passes:lay.passes};
+    }
+    case 'group_objects':{
+      const objs=[...new Set((args.ids||[]).map(id=>topLevelOf(id)).filter(Boolean))];
+      if(objs.length<2)return{error:'need 2+ objects'};
+      const g={id:uid(),type:'group',children:objs,x:0,y:0,w:0,h:0,rot:0,layer:S.layers[S.activeLayer].id};
+      S.objects=S.objects.filter(o=>!objs.includes(o));S.objects.push(g);S.sel=new Set([g.id]);
+      lcRefresh();return{group_id:g.id,members:objs.length};
+    }
+    case 'pattern_linear':{
+      const o=find(args.id);if(!o)return{error:'no object '+args.id};
+      const n=Math.min(60,Math.max(2,args.count|0));const ids=[];
+      for(let i=1;i<n;i++){const c=JSON.parse(JSON.stringify(o));reid(c);moveObj(c,(+args.dx||0)*i,(+args.dy||0)*i);S.objects.push(c);ids.push(c.id);}
+      S.sel=new Set(ids);lcRefresh();return{new_ids:ids};
+    }
+    case 'pattern_circular':{
+      const o=find(args.id);if(!o)return{error:'no object '+args.id};
+      const n=Math.min(60,Math.max(2,args.count|0));
+      const cx=+args.cx||S.bed.w/2,cy=+args.cy||S.bed.h/2;
+      const total=(args.total_angle!=null&&isFinite(+args.total_angle))?+args.total_angle:360;
+      const step=(Math.abs(total-360)<1e-9?360/n:total/(n-1))*Math.PI/180;
+      const ocx=o.x+o.w/2,ocy=o.y+o.h/2;const ids=[];
+      for(let i=1;i<n;i++){
+        const c=JSON.parse(JSON.stringify(o));reid(c);
+        const a=step*i,dx=ocx-cx,dy=ocy-cy;
+        const nx=cx+dx*Math.cos(a)-dy*Math.sin(a),ny=cy+dx*Math.sin(a)+dy*Math.cos(a);
+        moveObj(c,nx-ocx,ny-ocy);c.rot=(o.rot||0)+a*180/Math.PI;
+        S.objects.push(c);ids.push(c.id);
+      }
+      S.sel=new Set(ids);lcRefresh();return{new_ids:ids};
+    }
+    case 'get_estimate':
+      estimate();
+      return{time:$('#estTime').textContent,cut_length:$('#estLen').value,objects:$('#estObj').value};
+    case 'select_objects':
+      S.sel=new Set((args.ids||[]).map(Number).filter(id=>find(id)));syncPanels();draw();
+      return{selected:[...S.sel]};
+    case 'fit_view':fit();return{ok:true};
+    default:return{error:'unknown tool '+name};
+  }
+}
+
+/* ---- Gemini adapter (same as cad-studio; _graw preserves thoughtSignature) ---- */
+function lcToGeminiSchema(s){if(!s)return undefined;const T={object:'OBJECT',string:'STRING',number:'NUMBER',integer:'INTEGER',boolean:'BOOLEAN',array:'ARRAY'};
+  const o={type:T[s.type]||'STRING'};if(s.description)o.description=s.description;if(s.enum)o.enum=s.enum;
+  if(s.properties){o.properties={};for(const k in s.properties)o.properties[k]=lcToGeminiSchema(s.properties[k]);if(s.required)o.required=s.required;}
+  if(s.items)o.items=lcToGeminiSchema(s.items);return o;}
+function lcGeminiDecls(tools){return[{functionDeclarations:tools.map(t=>{const d={name:t.name,description:t.description};
+  if(t.input_schema&&t.input_schema.properties&&Object.keys(t.input_schema.properties).length)d.parameters=lcToGeminiSchema(t.input_schema);return d;})}];}
+function lcToGeminiContents(history,toolNames){
+  const parse=c=>{try{return JSON.parse(c);}catch(_){return{raw:String(c)};}};
+  return history.map(m=>{
+    if(m.role==='assistant'){if(m._graw)return m._graw;
+      return{role:'model',parts:m.content.map(b=>b.type==='tool_use'?{functionCall:{name:b.name,args:b.input||{}}}:{text:b.text||''})};}
+    if(typeof m.content==='string')return{role:'user',parts:[{text:m.content}]};
+    return{role:'user',parts:m.content.map(b=>b.type==='tool_result'
+      ?{functionResponse:{name:toolNames[b.tool_use_id]||'tool',response:{result:parse(b.content)}}}:{text:String(b.text||'')})};});
+}
+
+/* ---- agent loop + dock UI ---- */
+(function(){
+  const $id=s=>document.getElementById(s);
+  const dock=$id('lcDock'),msgs=$id('lcMsgs'),input=$id('lcInput'),send=$id('lcSend'),
+        stopB=$id('lcStop'),think=$id('lcThink'),keyIn=$id('lcKey'),modelSel=$id('lcModel');
+  const SYS=`You are the design copilot inside MakerForge Laser CAD (2D vector design for laser cutting, millimetres).
+Conventions: origin is the bed's TOP-LEFT, y grows DOWNWARD. Stored x/y are object top-left; the tools accept CENTERS (cx,cy) — think in centers. Rotation is degrees about the object's own center.
+Layers are laser OPERATIONS: cut (through — part outlines and holes), engrave (decoration, text), score (light lines). Put things on the right layer.
+Holes: a closed shape on the cut layer inside another cut shape IS a hole — no boolean needed. Keep holes ≥2mm from outlines so parts stay strong.
+Text is a single-stroke font — real cut/engrave geometry.
+Call get_canvas FIRST when the user refers to existing things ("that heart", "the tag"). Compute real coordinates from bboxes so things touch/center/align exactly. Presets (heart, gear, slot, arch, arrow, cross, lbracket) beat hand-written point lists. Keep the design inside the bed. Everything you do is undoable; briefly say WHAT you did. Be concise.`;
+  let history=[],busy=false,ctrl=null,gid=0;
+  const toolNames={};
+  const provider=()=>modelSel.value.startsWith('gemini')?'gemini':'anthropic';
+  const storeKey=()=>'mkf_'+provider()+'_key';
+  function loadKey(){
+    let v='';try{v=localStorage.getItem(storeKey())||'';}catch(_){/* blocked */}
+    if(!v&&window.MKF_KEYS&&window.MKF_KEYS[provider()])v=window.MKF_KEYS[provider()];
+    keyIn.value=v;
+    $id('lcKeyLabel').textContent=(provider()==='gemini'?'Google Gemini':'Anthropic')+' API key (stored only in this browser)';
+    keyIn.placeholder=provider()==='gemini'?'AIza…':'sk-ant-…';
+  }
+  loadKey();modelSel.addEventListener('change',loadKey);
+  keyIn.addEventListener('change',()=>{try{localStorage.setItem(storeKey(),keyIn.value.trim());}catch(_){}});
+  const add=(cls,text)=>{const d=document.createElement('div');d.className='cmsg '+cls;d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;};
+  const chip=t=>{const d=document.createElement('div');d.className='ctool';d.textContent=t;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;};
+  const setBusy=b=>{busy=b;think.classList.toggle('on',b);send.style.display=b?'none':'';stopB.style.display=b?'':'none';};
+  async function callLLM(){
+    const key=keyIn.value.trim();
+    if(provider()==='anthropic'){
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl.signal,
+        headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:modelSel.value,max_tokens:2048,system:SYS,tools:LC_TOOLS,messages:history.map(({_graw,...m})=>m)})});
+      if(!res.ok){const t=await res.text();throw new Error('API '+res.status+': '+t.slice(0,300));}
+      return res.json();
+    }
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelSel.value}:generateContent?key=${encodeURIComponent(key)}`,
+      {method:'POST',signal:ctrl.signal,headers:{'content-type':'application/json'},
+       body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:lcToGeminiContents(history,toolNames),tools:lcGeminiDecls(LC_TOOLS),generationConfig:{temperature:0.4}})});
+    const j=await res.json();
+    if(j.error)throw new Error('Gemini API '+(j.error.code||res.status)+': '+String(j.error.message||'').slice(0,300));
+    const cand=(j.candidates||[])[0];
+    if(!cand||!cand.content)throw new Error('Gemini returned no candidates'+(cand&&cand.finishReason?' ('+cand.finishReason+')':''));
+    const content=(cand.content.parts||[]).map(p=>p.functionCall
+      ?{type:'tool_use',id:'g'+(++gid),name:p.functionCall.name,input:p.functionCall.args||{}}
+      :{type:'text',text:p.text||''}).filter(b=>b.type==='tool_use'||b.text);
+    return{content,stop_reason:content.some(b=>b.type==='tool_use')?'tool_use':'end_turn',_graw:cand.content};
+  }
+  async function run(userText){
+    if(busy)return;
+    if(!keyIn.value.trim()){add('err',provider()==='gemini'
+      ?'Add your Google Gemini API key above first (aistudio.google.com → Get API key).'
+      :'Add your Anthropic API key above first (console.anthropic.com → API keys).');keyIn.focus();return;}
+    add('user',userText);
+    history.push({role:'user',content:userText});
+    if(history.length>40)history=history.slice(-30);
+    setBusy(true);ctrl=new AbortController();
+    try{
+      let malformed=0;
+      for(let round=0;round<12;round++){
+        let r;
+        try{r=await callLLM();}
+        catch(e){
+          if(/MALFORMED_FUNCTION_CALL/.test(String(e))&&malformed++<2){
+            const last=history[history.length-1];
+            const note='(Previous function call was malformed and discarded. Retry simpler — prefer presets, short point lists.)';
+            if(last&&last.role==='user'&&Array.isArray(last.content))last.content.push({type:'text',text:note});
+            else history.push({role:'user',content:note});
+            chip('retrying after malformed call');continue;
+          }
+          throw e;
+        }
+        history.push({role:'assistant',content:r.content,_graw:r._graw});
+        const toolUses=r.content.filter(b=>b.type==='tool_use');
+        r.content.filter(b=>b.type==='text'&&b.text.trim()).forEach(b=>add('ai',b.text));
+        if(r.stop_reason!=='tool_use'||!toolUses.length)break;
+        const results=toolUses.map(tu=>{
+          toolNames[tu.id]=tu.name;
+          let out;try{out=lcExec(tu.name,tu.input||{});}catch(e){out={error:String(e)};}
+          chip(tu.name+(tu.input&&tu.input.kind?' · '+tu.input.kind:tu.input&&tu.input.preset?' · '+tu.input.preset:tu.input&&tu.input.id!==undefined?' · #'+tu.input.id:''));
+          return{type:'tool_result',tool_use_id:tu.id,content:JSON.stringify(out)};
+        });
+        history.push({role:'user',content:results});
+      }
+    }catch(e){
+      if(e.name!=='AbortError')add('err',String(e.message||e));else add('ai','(stopped)');
+    }
+    setBusy(false);
+  }
+  const submit=()=>{const t=input.value.trim();if(!t)return;input.value='';run(t);};
+  send.addEventListener('click',submit);
+  stopB.addEventListener('click',()=>ctrl&&ctrl.abort());
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit();}});
+  document.querySelectorAll('#lcDock .chatsug button').forEach(b=>b.addEventListener('click',()=>{input.value=b.dataset.sug;submit();}));
+  const toggle=open=>{dock.classList.toggle('open',open);$id('btnChat').setAttribute('aria-expanded',String(open));if(open)input.focus();};
+  $id('btnChat').addEventListener('click',()=>toggle(!dock.classList.contains('open')));
+  $id('lcClose').addEventListener('click',()=>toggle(false));
+  $id('lcClear').addEventListener('click',()=>{history=[];msgs.querySelectorAll('.cmsg.user,.cmsg.ai:not(:first-child),.cmsg.err,.ctool').forEach(n=>n.remove());});
 })();
 </script>
 </body>
