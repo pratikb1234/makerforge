@@ -1742,7 +1742,14 @@ Call get_canvas FIRST when the user refers to existing things ("that heart", "th
       :'Add your Anthropic API key above first (console.anthropic.com → API keys).');keyIn.focus();return;}
     add('user',userText);
     history.push({role:'user',content:userText});
-    if(history.length>40)history=history.slice(-30);
+    // Trim only at exchange boundaries (plain user text) — a blind slice can
+    // start mid-tool-loop, which both APIs reject (Gemini: "function call
+    // turn must come after a user turn or a function response turn").
+    if(history.length>40){
+      let i=history.length-30;
+      while(i<history.length&&!(history[i].role==='user'&&typeof history[i].content==='string'))i++;
+      history=history.slice(i<history.length?i:history.length-1);
+    }
     setBusy(true);ctrl=new AbortController();
     try{
       let malformed=0;

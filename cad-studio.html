@@ -23,7 +23,9 @@
   .btn:active{transform:translateY(1px)}
   .btn.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));border-color:var(--acc2);color:#231103;font-weight:700}
   .btn.on{background:var(--blue);border-color:var(--blue);color:#0b2239}
-  .menu{position:absolute;top:110%;left:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:5px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:40;display:none;flex-direction:column;gap:2px}
+  .menu{position:absolute;top:110%;left:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:5px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:40;display:none;flex-direction:column;gap:2px;max-height:70vh;overflow-y:auto}
+  .menu .mh{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;padding:5px 9px 2px}
+  .menu button small{margin-left:auto;color:var(--mut);font-size:10px}
   .menu.show{display:flex}
   .menu button{background:transparent;border:none;color:var(--txt);text-align:left;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center;font-family:inherit}
   .menu button:hover{background:var(--blue);color:#0b2239}
@@ -127,30 +129,27 @@
       <button class="btn" id="mOpen" aria-label="Open model file">📂 Open</button>
     </div>
     <div class="g">
-      <div style="position:relative"><button class="btn" data-menu="addM" aria-haspopup="true" aria-expanded="false" aria-label="Add Body menu">🧊 Add Body ▾</button>
+      <div style="position:relative"><button class="btn" data-menu="addM" aria-haspopup="true" aria-expanded="false" aria-label="Add shape menu">＋ Add ▾</button>
         <div class="menu" id="addM">
+          <div class="mh">Solids</div>
           <button data-add="box" aria-label="Add box">🟦 Box</button>
           <button data-add="cylinder" aria-label="Add cylinder">🥫 Cylinder</button>
           <button data-add="sphere" aria-label="Add sphere">🔵 Sphere</button>
-          <button data-add="cone" aria-label="Add cone">🔺 Cone</button>
+          <button data-add="cone" aria-label="Add cone / frustum">🔺 Cone</button>
           <button data-add="torus" aria-label="Add torus">🍩 Torus</button>
-        </div>
-      </div>
-      <div style="position:relative"><button class="btn" data-menu="skM" aria-haspopup="true" aria-expanded="false" aria-label="Sketch menu">✏️ Sketch ▾</button>
-        <div class="menu" id="skM">
+          <button data-add="wedge" aria-label="Add wedge ramp">◺ Wedge</button>
+          <button data-add="pyramid" aria-label="Add pyramid">🔻 Pyramid</button>
+          <button data-add="hemisphere" aria-label="Add dome / hemisphere">🌗 Dome</button>
+          <button data-add="capsule" aria-label="Add capsule pill">💊 Capsule</button>
+          <button data-add="tube" aria-label="Add tube / pipe">⭕ Tube</button>
+          <div class="sep"></div>
+          <div class="mh">Sketch → solid</div>
           <button data-add="ext_rect" aria-label="Rectangle extrude">▭ Rectangle → Extrude</button>
           <button data-add="ext_circle" aria-label="Circle extrude">◯ Circle → Extrude</button>
           <button data-add="ext_poly" aria-label="Polygon extrude">⬡ Polygon → Extrude</button>
-          <div class="sep"></div>
           <button data-add="revolve" aria-label="Rectangle revolve">🔄 Rectangle → Revolve</button>
           <div class="sep"></div>
           <button data-add="text3d" aria-label="Solid 3D text">🔤 3D Text</button>
-          <div class="sep"></div>
-          <button data-add="wedge" aria-label="Wedge ramp">◺ Wedge</button>
-          <button data-add="pyramid" aria-label="Pyramid">🔻 Pyramid</button>
-          <button data-add="hemisphere" aria-label="Dome / hemisphere">🌗 Dome</button>
-          <button data-add="capsule" aria-label="Capsule pill">💊 Capsule</button>
-          <button data-add="tube" aria-label="Tube / pipe">⭕ Tube</button>
         </div>
       </div>
     </div>
@@ -162,12 +161,19 @@
     <div class="g">
       <button class="btn" id="mUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
       <button class="btn" id="mRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
-      <button class="btn" id="mDup" aria-label="Duplicate">⧉ Duplicate</button>
-      <button class="btn" id="mDel" aria-label="Delete">🗑 Delete</button>
-      <button class="btn" id="mMeasure" aria-label="Measure distance">📏 Measure</button>
-      <button class="btn" id="mSection" aria-label="Section view">✂ Section</button>
+    </div>
+    <div class="g">
+      <button class="btn" id="mChat" title="AI copilot — describe what to build or change (fastest way to model)" aria-label="AI modeling copilot" aria-expanded="false">✨ AI</button>
       <button class="btn" id="mInspect" title="Mass properties (volume, area, centroid, mass)" aria-label="Inspect mass properties">🔍 Inspect</button>
-      <button class="btn" id="mChat" title="AI modeling copilot — describe what to build or change" aria-label="AI modeling copilot" aria-expanded="false">✨ AI</button>
+      <div style="position:relative"><button class="btn" data-menu="moreM" aria-haspopup="true" aria-expanded="false" aria-label="More tools">⋯ More ▾</button>
+        <div class="menu" id="moreM">
+          <button id="mDup" aria-label="Duplicate (D)">⧉ Duplicate <small>D</small></button>
+          <button id="mDel" aria-label="Delete (Del)">🗑 Delete <small>Del</small></button>
+          <div class="sep"></div>
+          <button id="mMeasure" aria-label="Measure distance">📏 Measure</button>
+          <button id="mSection" aria-label="Section view">✂ Section</button>
+        </div>
+      </div>
     </div>
     <div style="flex:1"></div>
     <div class="g" style="border:none">
@@ -186,7 +192,7 @@
     <div class="side l">
       <div class="sec">
         <h3>Feature Timeline</h3>
-        <div class="body" id="tree"><div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div></div>
+        <div class="body" id="tree"><div class="hint">No features yet. Use <b>＋ Add</b> — or just tell the <b>✨ AI</b> what to build.</div></div>
       </div>
       <div class="sec">
         <h3>Parameters <button id="addParam" title="Add variable" aria-label="Add variable">＋</button></h3>
@@ -307,7 +313,7 @@ I use the same timeline as you — everything I do is undoable with Ctrl+Z.</div
 <div class="modal-bg" id="tourBg"><div class="modal tour" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
   <h2 id="tourTitle">Quick start</h2>
   <ul>
-    <li>The <b>🧊 Add Body</b> and <b>✏️ Sketch</b> menus create shapes — primitives, extrudes and revolves.</li>
+    <li>The <b>＋ Add</b> menu creates shapes — solids, extrudes, revolves and 3D text. Or just describe the part to the <b>✨ AI</b>.</li>
     <li>The <b>Feature Timeline</b> (left) is your editable history — click any feature to change its numbers later.</li>
     <li>Select <b>two bodies</b> (Ctrl/Cmd-click the timeline or Shift-click in 3D), then <b>Combine</b>, <b>Cut</b> or <b>Intersect</b>.</li>
     <li><b>🔍 Inspect</b> shows mass properties — volume, surface area, centroid and estimated weight.</li>
@@ -785,7 +791,7 @@ function updateClip(){const ax=$('#secAxis').value,pos=+$('#secPos').value,flip=
 function icon(t){return {box:'🟦',cylinder:'🥫',sphere:'🔵',cone:'🔺',torus:'🍩',extrude:'⬆',revolve:'🔄',boolean:'◑',text3d:'🔤',polyx:'⬟',wedge:'◺',pyramid:'🔻',hemisphere:'🌗',capsule:'💊',tube:'⭕'}[t]||'▪';}
 function renderTree(){
   const el=$('#tree');
-  if(!APP.features.length){el.innerHTML='<div class="hint">No features yet. Use <b>Add Body</b> or <b>Sketch</b>.</div>';return;}
+  if(!APP.features.length){el.innerHTML='<div class="hint">No features yet. Use <b>＋ Add</b> — or just tell the <b>✨ AI</b> what to build.</div>';return;}
   el.innerHTML='';
   APP.features.forEach(f=>{
     const consumed=isConsumed(f.id);
@@ -1390,7 +1396,15 @@ Ground rules:
       :'Add your Anthropic API key above first (console.anthropic.com → API keys). It never leaves this browser except to call the API.');keyIn.focus();return;}
     add('user',userText);
     history.push({role:'user',content:userText});
-    if(history.length>40)history=history.slice(-30); // keep context bounded
+    // Bound the context, but ONLY cut at an exchange boundary (a plain user
+    // text message). A blind slice can start the window mid-tool-loop, which
+    // Gemini rejects: "function call turn must come after a user turn or a
+    // function response turn" (and Anthropic rejects orphan tool_results).
+    if(history.length>40){
+      let i=history.length-30;
+      while(i<history.length&&!(history[i].role==='user'&&typeof history[i].content==='string'))i++;
+      history=history.slice(i<history.length?i:history.length-1);
+    }
     setBusy(true);ctrl=new AbortController();
     try{
       let malformedRetries=0;
