@@ -191,22 +191,28 @@
       <button class="btn icon" id="btnDup" title="Duplicate (Ctrl+D)" aria-label="Duplicate (Ctrl+D)"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button>
       <button class="btn icon" id="btnDel" title="Delete (Del)" aria-label="Delete (Del)"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
     </div>
-    <div class="tb-group" id="alignGroup" role="toolbar" aria-label="Align and distribute">
-      <button class="btn icon" data-al="left" title="Align left" aria-label="Align left"><svg class="ic" aria-hidden="true"><use href="#i-al-left"/></svg></button>
-      <button class="btn icon" data-al="cx" title="Align center X" aria-label="Align center X"><svg class="ic" aria-hidden="true"><use href="#i-al-cx"/></svg></button>
-      <button class="btn icon" data-al="right" title="Align right" aria-label="Align right"><svg class="ic" aria-hidden="true"><use href="#i-al-right"/></svg></button>
-      <button class="btn icon" data-al="top" title="Align top" aria-label="Align top"><svg class="ic" aria-hidden="true"><use href="#i-al-top"/></svg></button>
-      <button class="btn icon" data-al="cy" title="Align middle Y" aria-label="Align middle Y"><svg class="ic" aria-hidden="true"><use href="#i-al-cy"/></svg></button>
-      <button class="btn icon" data-al="bottom" title="Align bottom" aria-label="Align bottom"><svg class="ic" aria-hidden="true"><use href="#i-al-bottom"/></svg></button>
-      <button class="btn icon" data-al="dh" title="Distribute horizontally" aria-label="Distribute horizontally"><svg class="ic" aria-hidden="true"><use href="#i-dist-h"/></svg></button>
-      <button class="btn icon" data-al="dv" title="Distribute vertically" aria-label="Distribute vertically"><svg class="ic" aria-hidden="true"><use href="#i-dist-v"/></svg></button>
-    </div>
     <div class="tb-group" role="toolbar" aria-label="Arrange">
-      <button class="btn icon" data-bool="union" title="Union" aria-label="Union" disabled><svg class="ic" aria-hidden="true"><use href="#i-union"/></svg></button>
-      <button class="btn icon" id="btnGroup" title="Group (Ctrl+G)" aria-label="Group (Ctrl+G)"><svg class="ic" aria-hidden="true"><use href="#i-group"/></svg></button>
-      <button class="btn icon" id="btnUngroup" title="Ungroup" aria-label="Ungroup"><svg class="ic" aria-hidden="true"><use href="#i-ungroup"/></svg></button>
-      <button class="btn icon" id="btnFront" title="Bring to front" aria-label="Bring to front"><svg class="ic" aria-hidden="true"><use href="#i-front"/></svg></button>
-      <button class="btn icon" id="btnBack" title="Send to back" aria-label="Send to back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <div style="position:relative">
+        <button class="btn sm" id="btnArrange" aria-haspopup="true" aria-expanded="false" aria-label="Arrange menu"><svg class="ic" aria-hidden="true"><use href="#i-al-cx"/></svg> Arrange ▾</button>
+        <div class="lmenu" id="arrangeM">
+          <div class="mh">Align (2+ selected)</div>
+          <button data-al="left" aria-label="Align left"><svg class="ic" aria-hidden="true"><use href="#i-al-left"/></svg> Align left</button>
+          <button data-al="cx" aria-label="Align center X"><svg class="ic" aria-hidden="true"><use href="#i-al-cx"/></svg> Align center</button>
+          <button data-al="right" aria-label="Align right"><svg class="ic" aria-hidden="true"><use href="#i-al-right"/></svg> Align right</button>
+          <button data-al="top" aria-label="Align top"><svg class="ic" aria-hidden="true"><use href="#i-al-top"/></svg> Align top</button>
+          <button data-al="cy" aria-label="Align middle Y"><svg class="ic" aria-hidden="true"><use href="#i-al-cy"/></svg> Align middle</button>
+          <button data-al="bottom" aria-label="Align bottom"><svg class="ic" aria-hidden="true"><use href="#i-al-bottom"/></svg> Align bottom</button>
+          <div class="sep"></div>
+          <button data-al="dh" aria-label="Distribute horizontally"><svg class="ic" aria-hidden="true"><use href="#i-dist-h"/></svg> Distribute horizontally</button>
+          <button data-al="dv" aria-label="Distribute vertically"><svg class="ic" aria-hidden="true"><use href="#i-dist-v"/></svg> Distribute vertically</button>
+          <div class="sep"></div>
+          <button id="btnGroup" aria-label="Group (Ctrl+G)"><svg class="ic" aria-hidden="true"><use href="#i-group"/></svg> Group <small>Ctrl+G</small></button>
+          <button id="btnUngroup" aria-label="Ungroup"><svg class="ic" aria-hidden="true"><use href="#i-ungroup"/></svg> Ungroup</button>
+          <button id="btnFront" aria-label="Bring to front"><svg class="ic" aria-hidden="true"><use href="#i-front"/></svg> Bring to front</button>
+          <button id="btnBack" aria-label="Send to back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg> Send to back</button>
+          <button data-bool="union" aria-label="Union" disabled style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-union"/></svg> Union</button>
+        </div>
+      </div>
     </div>
     <div style="flex:1"></div>
     <button class="btn icon" id="btnPanel" title="Toggle panel" aria-label="Toggle panel" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-panel"/></svg></button>
@@ -928,7 +934,7 @@ $('#rot90').onclick=()=>{const objs=[...S.sel].map(id=>findObj(id)).filter(Boole
 /* =========================================================================
    Align / distribute
    ========================================================================= */
-$('#alignGroup').addEventListener('click',e=>{const b=e.target.closest('[data-al]');if(!b)return;align(b.dataset.al);});
+$('#arrangeM').addEventListener('click',e=>{const b=e.target.closest('[data-al]');if(!b)return;align(b.dataset.al);});
 function align(mode){
   const objs=[...S.sel].map(id=>findObj(id)).filter(Boolean);if(objs.length<2)return;pushHist();
   const bbs=objs.map(o=>({o,b:bbox(o)}));
@@ -1388,6 +1394,25 @@ window.closeModal=closeModal;window.toast=toast;
 })();
 </script>
 
+<!-- ================= Arrange dropdown ================= -->
+<style>
+  .lmenu{position:absolute;top:110%;left:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:5px;min-width:220px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:60;display:none;flex-direction:column;gap:2px;max-height:70vh;overflow-y:auto}
+  .lmenu.show{display:flex}
+  .lmenu button{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--txt);padding:7px 10px;border-radius:6px;cursor:pointer;font:inherit;font-size:12.5px;text-align:left;width:100%}
+  .lmenu button:hover{background:var(--panel)}
+  .lmenu button small{margin-left:auto;color:var(--mut);font-size:10px}
+  .lmenu .mh{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;padding:5px 9px 2px}
+  .lmenu .sep{height:1px;background:var(--line);margin:4px 2px}
+</style>
+<script>
+(function(){
+  const btn=document.getElementById('btnArrange'),menu=document.getElementById('arrangeM');
+  const set=open=>{menu.classList.toggle('show',open);btn.setAttribute('aria-expanded',String(open));};
+  btn.addEventListener('click',e=>{e.stopPropagation();set(!menu.classList.contains('show'));});
+  document.addEventListener('click',()=>set(false));
+})();
+</script>
+
 <!-- ================= ✨ AI design copilot (2D laser) ================= -->
 <style>
   .chatdock{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);background:var(--panel);border-left:1px solid var(--line2);z-index:90;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .18s ease;box-shadow:-12px 0 30px rgba(0,0,0,.35)}
@@ -1532,6 +1557,7 @@ const LC_TOOLS=[
  {name:'group_objects',description:'Group objects so they move together. Returns the group id.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'pattern_linear',description:'Create count-1 copies of an object spaced dx/dy mm apart.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},dx:{type:'number'},dy:{type:'number'}},required:['id','count']}},
  {name:'pattern_circular',description:'Circular pattern: count-1 copies rotated evenly about bed point (cx,cy) over total_angle deg (default 360); copies also spin to match.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},cx:{type:'number'},cy:{type:'number'},total_angle:{type:'number'}},required:['id','count']}},
+ {name:'align_objects',description:'Precisely align objects using real bboxes — no eyeballing. to: an object id or "bed". mode: center (both axes), center_h (horizontal centring = match x centers), center_v (vertical), left/right/top/bottom (flush edges; remember y grows DOWN, so top = smaller y). Also how to FIX "is it centred?" complaints.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},to:{type:'string',description:'object id number as string, or "bed"'},mode:{type:'string',enum:['center','center_h','center_v','left','right','top','bottom']}},required:['ids','mode']}},
  {name:'get_estimate',description:'The job estimate: total time, cut length, object count.',input_schema:{type:'object',properties:{}}},
  {name:'select_objects',description:'Set the UI selection (highlights for the user).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'fit_view',description:'Fit the bed in the viewport.',input_schema:{type:'object',properties:{}}}
@@ -1659,6 +1685,25 @@ function lcExec(name,args){
       }
       S.sel=new Set(ids);lcRefresh();return{new_ids:ids};
     }
+    case 'align_objects':{
+      let tb;
+      if(args.to==null||String(args.to).toLowerCase()==='bed')tb={x:0,y:0,w:S.bed.w,h:S.bed.h};
+      else{const t=find(parseInt(args.to,10));if(!t)return{error:'no target object '+args.to};tb=bbox(t);}
+      const moved=[];
+      (args.ids||[]).forEach(id=>{
+        const o=find(id);if(!o)return;const b=bbox(o);
+        let dx=0,dy=0;const m=args.mode;
+        if(m==='center'||m==='center_h')dx=(tb.x+tb.w/2)-(b.x+b.w/2);
+        if(m==='center'||m==='center_v')dy=(tb.y+tb.h/2)-(b.y+b.h/2);
+        if(m==='left')dx=tb.x-b.x;
+        if(m==='right')dx=(tb.x+tb.w)-(b.x+b.w);
+        if(m==='top')dy=tb.y-b.y;
+        if(m==='bottom')dy=(tb.y+tb.h)-(b.y+b.h);
+        moveObj(o,dx,dy);moved.push({id,dx:+dx.toFixed(2),dy:+dy.toFixed(2)});
+      });
+      if(moved.length)lcRefresh();
+      return{moved};
+    }
     case 'get_estimate':
       estimate();
       return{time:$('#estTime').textContent,cut_length:$('#estLen').value,objects:$('#estObj').value};
@@ -1697,7 +1742,8 @@ Conventions: origin is the bed's TOP-LEFT, y grows DOWNWARD. Stored x/y are obje
 Layers are laser OPERATIONS: cut (through — part outlines and holes), engrave (decoration, text), score (light lines). Put things on the right layer.
 Holes: a closed shape on the cut layer inside another cut shape IS a hole — no boolean needed. Keep holes ≥2mm from outlines so parts stay strong.
 Text is a single-stroke font — real cut/engrave geometry.
-Call get_canvas FIRST when the user refers to existing things ("that heart", "the tag"). Compute real coordinates from bboxes so things touch/center/align exactly. Presets (heart, gear, slot, arch, arrow, cross, lbracket) beat hand-written point lists. Keep the design inside the bed. Everything you do is undoable; briefly say WHAT you did. Be concise.`;
+Call get_canvas FIRST when the user refers to existing things ("that heart", "the tag"). Compute real coordinates from bboxes so things touch/center/align exactly. Presets (heart, gear, slot, arch, arrow, cross, lbracket) beat hand-written point lists. Keep the design inside the bed.
+"Is it centred/aligned?" → get_canvas and answer WITH NUMBERS from the bboxes (state the offset); fix with align_objects, never by eyeballing. Everything you do is undoable; briefly say WHAT you did. Be concise.`;
   let history=[],busy=false,ctrl=null,gid=0;
   const toolNames={};
   const provider=()=>modelSel.value.startsWith('gemini')?'gemini':'anthropic';

@@ -1147,6 +1147,7 @@ const CHAT_TOOLS=[
  {name:'duplicate_feature',description:'Duplicate a (non-boolean) feature, offset by dx/dy/dz mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'},dz:{type:'number'}},required:['id']}},
  {name:'delete_features',description:'Delete features by id. Booleans referencing a deleted input are removed too.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'boolean_op',description:'Boolean two LIVE bodies (not already consumed): union (combine), subtract (cut b from a), intersect. Creates a new timeline feature; both inputs become consumed.',input_schema:{type:'object',properties:{op:{type:'string',enum:['union','subtract','intersect']},a_id:{type:'integer'},b_id:{type:'integer'}},required:['op','a_id','b_id']}},
+ {name:'align_features',description:'Precisely align bodies to a target body using live world bboxes (no math errors). modes: center_x / center_y / center_z (match centers per axis), top (rest ON the target top face), bottom (hang under it), left/right (flush min/max X faces), front/back (flush max/min Z faces). Combine modes, e.g. ["center_x","center_z","top"] = centered on top. Also the way to FIX misalignment after checking get_scene.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},to_id:{type:'integer'},modes:{type:'array',items:{type:'string',enum:['center_x','center_y','center_z','top','bottom','left','right','front','back']}}},required:['ids','to_id','modes']}},
  {name:'set_parameter',description:'Create or update a named parameter usable in expressions (e.g. wall=3).',input_schema:{type:'object',properties:{name:{type:'string'},value:{type:'number'}},required:['name','value']}},
  {name:'inspect_mass',description:'Mass properties of the selected ids (or all visible bodies if ids omitted): volume mm³, surface area, centroid, watertight flag, mass in g for a density g/cm³ (PLA 1.24, ABS 1.04, steel 7.85, alu 2.70).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},density:{type:'number'}}}},
  {name:'set_view',description:'Change the camera: iso|front|top|right|fit.',input_schema:{type:'object',properties:{view:{type:'string',enum:['iso','front','top','right','fit']}},required:['view']}},
@@ -1270,6 +1271,35 @@ function chatExecTool(name,args){
       APP.sel=new Set(ids);pushHist();syncSel();rebuild();
       return{new_ids:ids};
     }
+    case 'align_features':{
+      const bb=chatBBoxMap();
+      const tgt=bb[args.to_id];
+      if(!tgt)return{error:'target '+args.to_id+' has no live body (consumed or hidden)'};
+      const modes=[].concat(args.modes||[]);
+      if(!modes.length)return{error:'no modes given'};
+      const ctr=a=>[(a.min[0]+a.max[0])/2,(a.min[1]+a.max[1])/2,(a.min[2]+a.max[2])/2];
+      const tc=ctr(tgt);const moved=[];
+      (args.ids||[]).forEach(id=>{
+        const f=APP.features.find(x=>x.id===id);const b=bb[id];
+        if(!f||!b||f.type==='boolean')return;
+        const oc=ctr(b);let dx=0,dy=0,dz=0;
+        modes.forEach(m=>{
+          if(m==='center_x')dx=tc[0]-oc[0];
+          if(m==='center_y')dy=tc[1]-oc[1];
+          if(m==='center_z')dz=tc[2]-oc[2];
+          if(m==='top')dy=tgt.max[1]-b.min[1];
+          if(m==='bottom')dy=tgt.min[1]-b.max[1];
+          if(m==='left')dx=tgt.min[0]-b.min[0];
+          if(m==='right')dx=tgt.max[0]-b.max[0];
+          if(m==='front')dz=tgt.max[2]-b.max[2];
+          if(m==='back')dz=tgt.min[2]-b.min[2];
+        });
+        f.x=(f.x||0)+dx;f.y=(f.y||0)+dy;f.z=(f.z||0)+dz;
+        moved.push({id,dx:+dx.toFixed(3),dy:+dy.toFixed(3),dz:+dz.toFixed(3)});
+      });
+      if(moved.length){pushHist();syncSel();rebuild();}
+      return{moved:moved.length?moved:'nothing movable (booleans/hidden bodies?)'};
+    }
     case 'set_parameter':{
       if(!/^[a-zA-Z_]\w*$/.test(String(args.name)))return{error:'bad name'};
       APP.params[args.name]=Number(args.value)||0;pushHist();renderParams();rebuild();
@@ -1344,6 +1374,7 @@ Ground rules:
 - 3D text: use add_text3d (solid letters, any font). 2D outlines: use add_extruded_polygon presets (heart, star, ellipse/oval, rounded_rect, slot, arch, arrow, cross, lbracket, gear) — NEVER hand-write long coordinate lists when a preset fits. Custom outlines: points list, ≤40 points. Profiles stand facing +Z; rotate rx:-90 to lay flat.
 - Vocabulary → shapes: ball=sphere; dome/bowl=hemisphere; pill/lozenge/rounded rod=capsule; pipe/tube/washer/ring/bushing=tube; donut=torus; ramp/doorstop=wedge; frustum/truncated cone=cone with r2>0; rod/shaft/disc=cylinder; plate/slab/bar=box; egg/ellipsoid=sphere + scale (sy≈1.35); elliptical cone/cylinder=cone/cylinder + sx≠sz. Per-axis scale sx/sy/sz works on every body; negative scale via mirror_feature.
 - Repeats: pattern_linear (rows, stacks) and pattern_circular (bolt circles, spokes, petals around a center). Symmetry: mirror_feature keep_original:true.
+- "Is it centered/aligned/touching?" questions: call get_scene and ANSWER WITH NUMBERS from the world bboxes (state the actual offsets). To fix alignment use align_features — never eyeball positions.
 - No fillets/chamfers here (mesh CSG) — suggest the B-Rep OpenCascade tool for those.
 - Prefer editing existing features over deleting and recreating. Keep edits minimal.
 - After building something, set_view fit sparingly (only when you created things off-screen).
