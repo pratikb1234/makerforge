@@ -186,6 +186,23 @@ Two tools (laser, cad) have a talk-to-model copilot ("✨ AI"). It drives the re
 
 ---
 
+## 8b. Deploying on Vercel (the current Studio OS target)
+
+Studio OS is a **Vite SPA on Vercel** (`studio-os-beta-seven.vercel.app`, `/assets/*`, `<title>Studio OS — Bits & Studios</title>`). As of this writing MakerForge is **not** deployed there — `/makerforge/*` and `/api/maker/*` all 404. To get it live:
+
+**Static tools — easy:**
+1. Copy the `makerforge/` folder into the Studio OS repo at **`public/makerforge/`** (Vite serves `public/` at the site root, so it deploys to `https://…/makerforge/*` with no config).
+   - Or add it as a git **submodule/subtree** pointed at `github.com/pratikb1234/makerforge` so updates are a pull.
+2. Make sure `.wasm` is served correctly — Vercel does this automatically for `public/` assets.
+3. **Do NOT ship `local-keys.js`** — it's git-ignored; keep it out of `public/`. Users paste their own key, or use the proxy below.
+4. Add a nav item + the `<iframe>` embed (§4) in the SPA.
+
+**⚠️ Storage — the Vercel gotcha:** my reference API (`../server.js`) persists with `fs.writeFileSync`. **That does not work on Vercel** — serverless functions have an ephemeral, read-only filesystem, so saved designs would vanish. On Vercel, implement the §5 routes as **Vercel Serverless/Edge Functions** (`/api/maker/designs.js`) backed by **Vercel KV, Vercel Postgres, or Vercel Blob** (Blob is ideal for the potentially-MB `payload`; KV/Postgres for the metadata list). Same 3-route contract, different storage line.
+
+**AI keys on Vercel:** don't put keys in the client bundle. Add a serverless proxy function (`/api/maker/ai`) that reads the key from a Vercel **Environment Variable** and forwards to Gemini/Anthropic; point the copilots' `callLLM()` at it (§7). This keeps keys server-side and lets you meter usage. (I can make this `callLLM()` edit.)
+
+**Fastest path to see it live:** because the tools are static, you can deploy just the folder as its own Vercel project (drag-drop `makerforge/` or `vercel deploy`) to get `makerforge.vercel.app` immediately, then embed that URL in Studio OS via iframe (cross-origin: works for viewing; for the save/load bridge either host same-origin per above, or ask me to switch the bridge to explicit target origins + add CORS to the API).
+
 ## 9. Getting updates / staying in sync
 
 The suite is published at **https://github.com/pratikb1234/makerforge** (public, MIT, no keys in tree or history). To pull a newer MakerForge into Studio OS: replace the `makerforge/` folder (or `git subtree pull`) — the integration seams (§4 message contract, §5 API, §6 tokens) are stable, so drop-in updates won't break your wiring. If you fork it, keep your `tokens.css` overrides in a separate layer so updates don't clobber your theme.
