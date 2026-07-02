@@ -334,6 +334,7 @@
             <div class="field"><span>Power %</span><input type="number" id="layPower" min="0" max="100" value="80"></div>
             <div class="field"><span>Speed</span><input type="number" id="laySpeed" value="60"></div>
             <div class="field"><span>Passes</span><input type="number" id="layPass" min="1" value="1"></div>
+            <div class="field"><span>Kerf mm</span><input type="number" id="layKerf" min="0" step="0.05" value="0" title="Beam width compensation — closed cut paths are offset outward (holes inward) by half this at export"></div>
           </div>
           <div class="swatches" id="laySwatches"></div>
         </div>
@@ -879,8 +880,8 @@ function renderLayers(){
   const sw=$('#laySwatches');sw.innerHTML='';
   LAYER_COLORS.forEach(c=>{const i=document.createElement('i');i.style.background=c;if(S.layers[S.activeLayer]&&S.layers[S.activeLayer].color===c)i.classList.add('on');i.onclick=()=>{S.layers[S.activeLayer].color=c;renderLayers();draw();};sw.appendChild(i);});
 }
-function loadLayerEditor(){const l=S.layers[S.activeLayer];if(!l)return;$('#layMode').value=l.mode;$('#layPower').value=l.power;$('#laySpeed').value=l.speed;$('#layPass').value=l.passes;renderLayers();}
-['layMode','layPower','laySpeed','layPass'].forEach(id=>{$('#'+id).addEventListener('input',()=>{const l=S.layers[S.activeLayer];l.mode=$('#layMode').value;l.power=+$('#layPower').value;l.speed=+$('#laySpeed').value;l.passes=Math.max(1,+$('#layPass').value|0);renderLayers();draw();estimate();});});
+function loadLayerEditor(){const l=S.layers[S.activeLayer];if(!l)return;$('#layMode').value=l.mode;$('#layPower').value=l.power;$('#laySpeed').value=l.speed;$('#layPass').value=l.passes;$('#layKerf').value=l.kerf||0;renderLayers();}
+['layMode','layPower','laySpeed','layPass','layKerf'].forEach(id=>{$('#'+id).addEventListener('input',()=>{const l=S.layers[S.activeLayer];l.mode=$('#layMode').value;l.power=+$('#layPower').value;l.speed=+$('#laySpeed').value;l.passes=Math.max(1,+$('#layPass').value|0);l.kerf=Math.max(0,+$('#layKerf').value||0);renderLayers();draw();estimate();});});
 $('#addLayer').addEventListener('click',()=>{const c=LAYER_COLORS[S.layers.length%LAYER_COLORS.length];S.layers.push({id:uid(),name:'Layer '+(S.layers.length+1),color:c,mode:'cut',power:80,speed:60,passes:1,visible:true,output:true});S.activeLayer=S.layers.length-1;renderLayers();loadLayerEditor();});
 
 function syncPanels(){
@@ -1023,8 +1024,63 @@ function flatObjects(list,acc){acc=acc||[];list.forEach(o=>{if(o.type==='group')
    Import / Export
    ========================================================================= */
 /* ---- Interop export scene: flatten to per-layer world-mm polylines ---- */
+/* Offset a closed polygon by delta mm with ROUND JOINS. Positive delta grows
+   the area regardless of the ring's winding. Built for kerf compensation
+   (small deltas), so no self-intersection cleanup. Pure — unit-tested. */
+function offsetPolygon(pts,delta){
+  let p=pts.slice();
+  if(p.length>2&&Math.abs(p[0].x-p[p.length-1].x)<1e-9&&Math.abs(p[0].y-p[p.length-1].y)<1e-9)p=p.slice(0,-1);
+  if(p.length<3||Math.abs(delta)<1e-9)return pts.map(q=>({x:q.x,y:q.y}));
+  let area=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];area+=a.x*b.y-b.x*a.y;}
+  const dir=area>=0?1:-1;               // outward normal = dir·(dy,−dx)/len
+  const n=p.length,out=[];
+  const norm=i=>{const a=p[i],b=p[(i+1)%n];const dx=b.x-a.x,dy=b.y-a.y;const L=Math.hypot(dx,dy)||1e-12;return{x:dir*dy/L,y:dir*-dx/L};};
+  for(let i=0;i<n;i++){
+    const prev=p[(i-1+n)%n],v=p[i],next=p[(i+1)%n];
+    const n1=norm((i-1+n)%n),n2=norm(i);
+    const p1={x:v.x+n1.x*delta,y:v.y+n1.y*delta},p2={x:v.x+n2.x*delta,y:v.y+n2.y*delta};
+    const e1={x:v.x-prev.x,y:v.y-prev.y},e2={x:next.x-v.x,y:next.y-v.y};
+    const convex=(e1.x*e2.y-e1.y*e2.x)*dir>0;
+    if(convex===(delta>0)){ // offset points away from the corner → ROUND join
+      out.push(p1);
+      let a1=Math.atan2(p1.y-v.y,p1.x-v.x),a2=Math.atan2(p2.y-v.y,p2.x-v.x);
+      let sweep=a2-a1;while(sweep>Math.PI)sweep-=Math.PI*2;while(sweep<-Math.PI)sweep+=Math.PI*2;
+      const steps=Math.ceil(Math.abs(sweep)/0.45);
+      for(let k=1;k<steps;k++){const a=a1+sweep*k/steps;out.push({x:v.x+Math.cos(a)*Math.abs(delta),y:v.y+Math.sin(a)*Math.abs(delta)});}
+      out.push(p2);
+    }else{ // offset toward the corner → MITER (intersection of offset edges)
+      const d=e1.x*e2.y-e1.y*e2.x;
+      if(Math.abs(d)<1e-12)out.push(p1);
+      else{
+        const t=((p2.x-p1.x)*e2.y-(p2.y-p1.y)*e2.x)/d;
+        const m={x:p1.x+t*e1.x,y:p1.y+t*e1.y};
+        const lim=Math.abs(delta)*4,dv=Math.hypot(m.x-v.x,m.y-v.y);
+        if(dv>lim){const f=lim/dv;out.push({x:v.x+(m.x-v.x)*f,y:v.y+(m.y-v.y)*f});}
+        else out.push(m);
+      }
+    }
+  }
+  out.push({x:out[0].x,y:out[0].y});
+  return out;
+}
+/* Kerf compensation: on cut layers with kerf>0, offset each closed path by
+   half the beam width — OUTWARD for outer profiles, INWARD for holes (a hole
+   = a closed cut path nested inside another closed cut path of the layer). */
+function applyKerf(shapes,layers){
+  layers.forEach((lay,li)=>{
+    const k=+lay.kerf||0;
+    if(k<=0||lay.mode!=='cut')return;
+    const mine=shapes.filter(s=>s.layerIndex===li&&s.closed&&s.pts.length>3);
+    const rings=mine.map(s=>s.pts);
+    mine.forEach((s,i)=>{
+      let depth=0;const probe=s.pts[0];
+      rings.forEach((r,j)=>{if(j!==i&&pointInPoly(probe.x,probe.y,r))depth++;});
+      s.pts=offsetPolygon(s.pts,(depth%2===0?1:-1)*k/2);
+    });
+  });
+}
 function buildScene(){
-  const layers=S.layers.map(l=>({name:l.name,color:l.color,mode:l.mode,power:l.power,speed:l.speed,passes:Math.max(1,l.passes||1)}));
+  const layers=S.layers.map(l=>({name:l.name,color:l.color,mode:l.mode,power:l.power,speed:l.speed,passes:Math.max(1,l.passes||1),kerf:+l.kerf||0}));
   const idx={};S.layers.forEach((l,i)=>idx[l.id]=i);
   const shapes=[];
   flatObjects(S.objects).forEach(o=>{
@@ -1032,7 +1088,28 @@ function buildScene(){
     const closed=(o.type!=='line'&&o.type!=='pen'&&o.type!=='text')||o.closed;
     shapePolys(o).forEach(poly=>{if(poly.length>=2)shapes.push({layerIndex:li,mode:lay.mode,closed,pts:poly});});
   });
+  applyKerf(shapes,layers);
   return {bed:S.bed,layers,shapes,texts:[]}; // text ships as real paths now (§4.4)
+}
+/* DXF R12 — POLYLINE entities, one DXF layer per laser layer, Y flipped to
+   CAD's Y-up like the other machine exporters. Pure (takes the scene). */
+function genDXF(sc){
+  const L=[];const push=(...a)=>a.forEach(x=>L.push(String(x)));
+  const lname=n=>(String(n).replace(/[^A-Za-z0-9_-]/g,'_').toUpperCase()||'LAYER');
+  push(0,'SECTION',2,'HEADER',9,'$ACADVER',1,'AC1009',9,'$INSUNITS',70,4,0,'ENDSEC');
+  push(0,'SECTION',2,'TABLES',0,'TABLE',2,'LAYER',70,sc.layers.length);
+  sc.layers.forEach(l=>push(0,'LAYER',2,lname(l.name),70,0,62,7,6,'CONTINUOUS'));
+  push(0,'ENDTAB',0,'ENDSEC',0,'SECTION',2,'ENTITIES');
+  sc.shapes.forEach(s=>{
+    let pts=s.pts.slice();
+    if(pts.length>2&&Math.abs(pts[0].x-pts[pts.length-1].x)<1e-6&&Math.abs(pts[0].y-pts[pts.length-1].y)<1e-6)pts.pop();
+    const lay=lname(sc.layers[s.layerIndex].name);
+    push(0,'POLYLINE',8,lay,66,1,70,s.closed?1:0);
+    pts.forEach(p=>push(0,'VERTEX',8,lay,10,p.x.toFixed(3),20,(sc.bed.h-p.y).toFixed(3),30,'0'));
+    push(0,'SEQEND');
+  });
+  push(0,'ENDSEC',0,'EOF');
+  return L.join('\r\n');
 }
 function xesc(s){return String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));}
 /* SVG — color-per-layer, importable by LightBurn, LaserWeb4, MeerK40t, Inkscape, Glowforge */
@@ -1086,11 +1163,16 @@ function showExport(){
       <div style="border:1px solid var(--line2);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px">
         <div style="font-size:26px">⌗</div><div style="flex:1"><b>G-code <span class="tag">.gcode</span></b><div style="color:var(--mut);font-size:12px">GRBL / M4 direct to the controller (Y flipped to machine origin). Preview &amp; copy available.</div></div>
         <button class="btn pri" id="exGC">Download</button></div>
+      <div style="border:1px solid var(--line2);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:26px">📐</div><div style="flex:1"><b>DXF <span class="tag">.dxf</span></b><div style="color:var(--mut);font-size:12px">R12 polylines, one DXF layer per laser layer. For CAD tools, LightBurn, Fusion, LibreCAD.</div></div>
+        <button class="btn pri" id="exDXF">Download</button></div>
     </div>
+    <div style="color:var(--mut);font-size:11.5px;margin-top:8px">Kerf compensation (per layer, Layers panel) is applied to all exports: closed cut paths offset outward, holes inward, by half the kerf.</div>
     <div class="foot"><button class="btn" id="exGCview">Preview G-code</button><button class="btn" onclick="closeModal()">Close</button></div>`);
   $('#exSVG').onclick=()=>{download('makerforge.svg',genSVG(),'image/svg+xml');toast('SVG downloaded');};
   $('#exLBRN').onclick=()=>{download('makerforge.lbrn',genLBRN(),'application/xml');toast('LightBurn file downloaded');};
   $('#exGC').onclick=()=>{download('makerforge.gcode',toGcode());toast('G-code downloaded');};
+  $('#exDXF').onclick=()=>{download('makerforge.dxf',genDXF(buildScene()),'application/dxf');toast('DXF downloaded');};
   $('#exGCview').onclick=()=>showGcode();
 }
 
@@ -1553,7 +1635,7 @@ const LC_TOOLS=[
  {name:'duplicate_object',description:'Duplicate an object offset by dx/dy mm. Returns the new id.',input_schema:{type:'object',properties:{id:{type:'integer'},dx:{type:'number'},dy:{type:'number'}},required:['id']}},
  {name:'flip_object',description:'Mirror an object horizontally (dir "h") or vertically ("v") in place.',input_schema:{type:'object',properties:{id:{type:'integer'},dir:{type:'string',enum:['h','v']}},required:['id','dir']}},
  {name:'assign_layer',description:'Move objects to a layer ("cut"/"engrave"/"score" or name).',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}},layer:{type:'string'}},required:['ids','layer']}},
- {name:'set_layer',description:'Change laser settings of a layer: power (%), speed (mm/s), passes, visible.',input_schema:{type:'object',properties:{layer:{type:'string'},power:{type:'number'},speed:{type:'number'},passes:{type:'integer'},visible:{type:'boolean'}},required:['layer']}},
+ {name:'set_layer',description:'Change laser settings of a layer: power (%), speed (mm/s), passes, visible, kerf (mm beam width — exports offset closed cut paths outward and holes inward by half of it so parts fit precisely).',input_schema:{type:'object',properties:{layer:{type:'string'},power:{type:'number'},speed:{type:'number'},passes:{type:'integer'},visible:{type:'boolean'},kerf:{type:'number'}},required:['layer']}},
  {name:'group_objects',description:'Group objects so they move together. Returns the group id.',input_schema:{type:'object',properties:{ids:{type:'array',items:{type:'integer'}}},required:['ids']}},
  {name:'pattern_linear',description:'Create count-1 copies of an object spaced dx/dy mm apart.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},dx:{type:'number'},dy:{type:'number'}},required:['id','count']}},
  {name:'pattern_circular',description:'Circular pattern: count-1 copies rotated evenly about bed point (cx,cy) over total_angle deg (default 360); copies also spin to match.',input_schema:{type:'object',properties:{id:{type:'integer'},count:{type:'integer'},cx:{type:'number'},cy:{type:'number'},total_angle:{type:'number'}},required:['id','count']}},
@@ -1654,7 +1736,8 @@ function lcExec(name,args){
       if(args.speed!=null)lay.speed=Math.max(1,+args.speed);
       if(args.passes!=null)lay.passes=Math.max(1,args.passes|0);
       if(args.visible!=null)lay.visible=!!args.visible;
-      lcRefresh();return{layer:lay.name,power:lay.power,speed:lay.speed,passes:lay.passes};
+      if(args.kerf!=null)lay.kerf=Math.max(0,+args.kerf||0);
+      lcRefresh();return{layer:lay.name,power:lay.power,speed:lay.speed,passes:lay.passes,kerf:lay.kerf||0};
     }
     case 'group_objects':{
       const objs=[...new Set((args.ids||[]).map(id=>topLevelOf(id)).filter(Boolean))];

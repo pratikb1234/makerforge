@@ -253,8 +253,8 @@ The tools are **functionally** solid but **visually** engineer-made. Deliver a d
 4. **Edge-select fillet/chamfer** (only on the B-Rep tool; needs Replicad `EdgeFinder`). Pick edges in 3D → fillet just those (Fusion parity).
 5. **Sketch → extrude on a face** (select a planar face, sketch on it) — the core Onshape loop.
 6. **On-canvas transform gizmo** (move/rotate/scale handles in 3D).
-7. **DXF import/export** for the laser tools (LightBurn/CAD interchange beyond SVG).
-8. **Kerf offset** (laser) — offset paths by half beam width so parts fit precisely.
+7. ~~DXF **export**~~ ✅ DONE (R12 polylines, layer-per-layer, in the Export modal). DXF *import* still open.
+8. ~~**Kerf offset**~~ ✅ DONE — per-layer kerf (Layers panel + copilot set_layer); closed cut paths offset outward, holes inward, by kerf/2 in every exporter (round-join grow / miter shrink, unit-tested).
 9. **Font→path vectorization** for laser text (§4.4).
 
 ### P2 — robustness & scale
