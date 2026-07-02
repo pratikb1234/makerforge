@@ -1483,6 +1483,26 @@ Ground rules:
   $id('chatClose').addEventListener('click',()=>toggle(false));
   $id('chatClear').addEventListener('click',()=>{history=[];msgs.querySelectorAll('.cmsg.user,.cmsg.ai:not(:first-child),.cmsg.err,.ctool').forEach(n=>n.remove());});
 })();
+
+/* ── Studio OS bridge ─────────────────────────────────────────────────────
+   When embedded in the Bits & Studios ops app, the host saves/loads models
+   to the studio's design library over postMessage (same-origin only). */
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||!e.data)return;
+  if(e.data.type==='mkf:get'){
+    e.source.postMessage({type:'mkf:doc',tool:'cad',
+      payload:{v:1,features:APP.features,params:APP.params}},location.origin);
+  }
+  if(e.data.type==='mkf:load'&&e.data.payload){
+    const d=e.data.payload;
+    APP.features=d.features||[];
+    APP.params=d.params||{wall:3};
+    APP._id=Math.max(1,...APP.features.map(x=>x.id),0)+1;
+    APP.sel.clear();
+    pushHist();renderParams();syncSel();rebuild();fitView();
+    toast('📂 Loaded from Studio');
+  }
+});
 </script>
 </body>
 </html>

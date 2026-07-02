@@ -1922,6 +1922,25 @@ Call get_canvas FIRST when the user refers to existing things ("that heart", "th
   $id('lcClose').addEventListener('click',()=>toggle(false));
   $id('lcClear').addEventListener('click',()=>{history=[];msgs.querySelectorAll('.cmsg.user,.cmsg.ai:not(:first-child),.cmsg.err,.ctool').forEach(n=>n.remove());});
 })();
+
+/* ── Studio OS bridge ─────────────────────────────────────────────────────
+   When embedded in the Bits & Studios ops app, the host saves/loads designs
+   to the studio's design library over postMessage (same-origin only). */
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||!e.data)return;
+  if(e.data.type==='mkf:get'){
+    e.source.postMessage({type:'mkf:doc',tool:'laser',
+      payload:{v:1,objects:S.objects,layers:S.layers,bed:S.bed}},location.origin);
+  }
+  if(e.data.type==='mkf:load'&&e.data.payload){
+    const d=e.data.payload;
+    S.objects=d.objects||[];
+    S.layers=(d.layers&&d.layers.length)?d.layers:defaultLayers();
+    S.bed=d.bed||S.bed;S.activeLayer=0;S.sel.clear();
+    pushHist();renderLayers();syncPanels();fit();draw();estimate();
+    toast('📂 Loaded from Studio');
+  }
+});
 </script>
 </body>
 </html>
