@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MakerForge · Aero Lab — Airfoil + CO₂ Dragster</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  :root{--bg:var(--tk-bg,#12151a);--panel:var(--tk-panel,#191d24);--panel2:var(--tk-panel-2,#20252e);--line:var(--tk-line,#2b323d);--line2:var(--tk-line-2,#3a434f);--txt:var(--tk-text,#e8edf3);--mut:var(--tk-mut,#9aa6b5);--acc:var(--tk-acc,#f0803c);--blue:var(--tk-blue,#6db1ff);--ok:var(--tk-ok,#3ecf8e);--warn:var(--tk-warn,#ffb454);--danger:var(--tk-danger,#ff5f6d)}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .app{display:grid;grid-template-rows:auto 1fr;height:100%}
+  .top{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand{font-weight:800;display:flex;align-items:center;gap:8px}.brand small{color:var(--mut);font-weight:500}
+  .brand .d{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--acc),var(--blue))}
+  .tab{background:none;border:1px solid transparent;color:var(--mut);border-radius:8px;padding:7px 13px;cursor:pointer;font:inherit;font-weight:600}
+  .tab:hover{color:var(--txt)}.tab.on{background:var(--panel2);border-color:var(--line2);color:var(--txt)}
+  .sp{flex:1}
+  .main{display:grid;grid-template-columns:300px 1fr;min-height:0}
+  .side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px}
+  .side h3{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)}
+  .side .hint{color:var(--mut);font-size:11.5px;line-height:1.5;margin:2px 0 14px}
+  .fld{margin-bottom:11px}
+  .fld label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut);margin-bottom:4px}
+  .fld label b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .fld input[type=range]{width:100%;accent-color:var(--acc)}
+  .fld input[type=text],.fld input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;color:var(--txt);padding:7px 9px;font:inherit}
+  .fld input:focus{outline:2px solid var(--acc);outline-offset:0}
+  .view{position:relative;min-height:0;display:flex;flex-direction:column}
+  canvas{display:block;width:100%;background:radial-gradient(circle at 50% 35%,#161b22,#0e1116)}
+  .results{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .kpi{background:var(--panel);padding:10px 14px}
+  .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-top:1px}
+  .kpi .v.good{color:var(--ok)}.kpi .v.warn{color:var(--warn)}
+  .note{padding:8px 14px;color:var(--mut);font-size:11px;border-top:1px solid var(--line);background:var(--panel)}
+  .pane{display:none;height:100%;min-height:0;flex-direction:column}.pane.on{display:flex}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .seg{display:flex;gap:0;border:1px solid var(--line2);border-radius:8px;overflow:hidden;margin-bottom:11px}
+  .seg button{flex:1;background:var(--panel2);border:none;color:var(--mut);padding:7px 0;cursor:pointer;font:inherit;font-size:12px}
+  .seg button.on{background:var(--acc);color:#231103;font-weight:700}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+  <div class="top">
+    <div class="brand"><span class="d"></span> MakerForge <small>Aero Lab</small></div>
+    <button class="tab on" data-pane="airfoil">✈️ Airfoil (NACA + Glauert)</button>
+    <button class="tab" data-pane="race">🏎️ CO₂ Dragster race</button>
+    <span class="sp"></span>
+    <small style="color:var(--mut)">Built for F1 in Schools · design → simulate → iterate</small>
+  </div>
+  <div class="main">
+    <!-- ===================== AIRFOIL ===================== -->
+    <div class="side" id="side-airfoil">
+      <h3>NACA 4-digit airfoil</h3>
+      <div class="hint">Thin-airfoil (Glauert) theory: lift and moment from the camber line. Great for sizing a front/rear wing.</div>
+      <div class="fld"><label for="afCode">NACA code</label><input type="text" id="afCode" value="2412" maxlength="4"></div>
+      <div class="fld"><label>Angle of attack <b id="afaV">4.0°</b></label><input type="range" id="afa" min="-8" max="16" step="0.5" value="4"></div>
+      <div class="fld"><label>Chord <b id="afcV">80 mm</b></label><input type="range" id="afc" min="20" max="200" step="5" value="80"></div>
+      <h3 style="margin-top:16px">Presets</h3>
+      <div class="seg" id="afPresets">
+        <button data-naca="0012">0012</button>
+        <button data-naca="2412" class="on">2412</button>
+        <button data-naca="4412">4412</button>
+        <button data-naca="6409">6409</button>
+      </div>
+      <div class="hint" id="afDesc"></div>
+    </div>
+    <div class="view pane on" id="pane-airfoil">
+      <canvas id="afCanvas" height="360"></canvas>
+      <div class="results">
+        <div class="kpi"><div class="v" id="afCl">—</div><div class="l">Lift coef. Cl</div></div>
+        <div class="kpi"><div class="v" id="afA0">—</div><div class="l">Zero-lift angle α₀</div></div>
+        <div class="kpi"><div class="v" id="afCm">—</div><div class="l">Moment Cm c/4</div></div>
+        <div class="kpi"><div class="v" id="afLD">—</div><div class="l">Downforce @ 15 m/s</div></div>
+        <div class="kpi"><div class="v" id="afStall">—</div><div class="l">Thin-theory note</div></div>
+      </div>
+      <div class="note" id="afNote"></div>
+    </div>
+
+    <!-- ===================== RACE ===================== -->
+    <div class="side" id="side-race" style="display:none">
+      <h3>CO₂ dragster</h3>
+      <div class="hint">Integrates the launch down the track: CO₂ thrust vs. aero drag vs. rolling resistance. Tune the car, watch the run time.</div>
+      <div class="fld"><label>Car mass <b id="rmV">55 g</b></label><input type="range" id="rm" min="35" max="120" step="1" value="55"></div>
+      <div class="fld"><label>Drag coef. C<sub>d</sub> <b id="rcdV">0.45</b></label><input type="range" id="rcd" min="0.15" max="0.9" step="0.01" value="0.45"></div>
+      <div class="fld"><label>Frontal area <b id="raV">12.0 cm²</b></label><input type="range" id="ra" min="4" max="30" step="0.5" value="12"></div>
+      <div class="fld"><label>CO₂ total impulse <b id="rjV">1.00 N·s</b></label><input type="range" id="rj" min="0.4" max="1.8" step="0.02" value="1.0"></div>
+      <div class="fld"><label>Thrust burn time <b id="rtbV">0.30 s</b></label><input type="range" id="rtb" min="0.1" max="0.8" step="0.02" value="0.3"></div>
+      <div class="fld"><label>Rolling resistance <b id="rrrV">0.050</b></label><input type="range" id="rrr" min="0" max="0.12" step="0.005" value="0.05"></div>
+      <div class="fld"><label>Track length <b id="rLV">20.0 m</b></label><input type="range" id="rL" min="10" max="25" step="0.5" value="20"></div>
+      <div class="hint" style="margin-top:6px">Lighter + slippier + less frontal area = faster. But you need mass for stability and material for strength — that's the design tension.</div>
+    </div>
+    <div class="view pane" id="pane-race">
+      <canvas id="rcCanvas" height="360"></canvas>
+      <div class="results">
+        <div class="kpi"><div class="v" id="rcTime">—</div><div class="l">Run time (20 m)</div></div>
+        <div class="kpi"><div class="v" id="rcTop">—</div><div class="l">Top speed</div></div>
+        <div class="kpi"><div class="v" id="rcExit">—</div><div class="l">Speed at finish</div></div>
+        <div class="kpi"><div class="v" id="rcAvg">—</div><div class="l">Average speed</div></div>
+        <div class="kpi"><div class="v" id="rcDrag">—</div><div class="l">Peak drag force</div></div>
+      </div>
+      <div class="note" id="rcNote"></div>
+    </div>
+  </div>
+</div>
+<script>
+/* ============================================================================
+   MakerForge · Aero Lab — pure physics (unit-tested in tests/aero-lab.test.js)
+   ============================================================================ */
+
+/* ---- NACA 4-digit geometry ----
+   code "MPXX": M=max camber %chord, P=camber position (tenths), XX=thickness %chord.
+   Returns closed loop (upper LE→TE, lower TE→LE) + camber line, chord = c mm. */
+function parseNACA(code){
+  const s=String(code).trim();
+  if(!/^\d{4}$/.test(s))return null;
+  return {m:(+s[0])/100, p:(+s[1])/10, t:(+s.slice(2))/100, code:s};
+}
+function nacaThickness(x,t){ // half-thickness, closed trailing edge (-0.1036)
+  return 5*t*(0.2969*Math.sqrt(x)-0.1260*x-0.3516*x*x+0.2843*x*x*x-0.1036*x*x*x*x);
+}
+function nacaCamber(x,m,p){
+  if(m===0||p===0)return 0;
+  return x<p ? (m/(p*p))*(2*p*x-x*x) : (m/((1-p)*(1-p)))*((1-2*p)+2*p*x-x*x);
+}
+function nacaDyDx(x,m,p){
+  if(m===0||p===0)return 0;
+  return x<p ? (2*m/(p*p))*(p-x) : (2*m/((1-p)*(1-p)))*(p-x);
+}
+function nacaProfile(code,n,chord){
+  const g=parseNACA(code);if(!g)return null;
+  n=n||120;chord=chord||1;
+  const up=[],lo=[],cam=[];
+  for(let i=0;i<=n;i++){
+    const x=0.5*(1-Math.cos(Math.PI*i/n)); // cosine spacing (dense at LE/TE)
+    const yt=nacaThickness(x,g.t),yc=nacaCamber(x,g.m,g.p),th=Math.atan(nacaDyDx(x,g.m,g.p));
+    up.push({x:(x-yt*Math.sin(th))*chord, y:(yc+yt*Math.cos(th))*chord});
+    lo.push({x:(x+yt*Math.sin(th))*chord, y:(yc-yt*Math.cos(th))*chord});
+    cam.push({x:x*chord,y:yc*chord});
+  }
+  return {upper:up,lower:lo,camber:cam,geo:g};
+}
+
+/* ---- Thin-airfoil (Glauert) theory ----
+   x = (1-cosθ)/2, θ∈[0,π]. Fourier coeffs of dyc/dx give α₀, Cl, Cm_c/4.
+   Cl = 2π(α − α₀); slope 2π/rad ≈ 0.1097/deg. Returns degrees & coefficients. */
+function thinAirfoil(code,alphaDeg,N){
+  const g=parseNACA(code);if(!g)return null;
+  N=N||400;
+  const f=t=> nacaDyDx(0.5*(1-Math.cos(t)),g.m,g.p);
+  // integrate over θ∈(0,π) with the midpoint rule
+  let I0=0,A1=0,A2=0;const dt=Math.PI/N;
+  for(let i=0;i<N;i++){const th=(i+0.5)*dt,d=f(th);I0+=d*dt;A1+=d*Math.cos(th)*dt;A2+=d*Math.cos(2*th)*dt;}
+  I0/=Math.PI;A1*=2/Math.PI;A2*=2/Math.PI;
+  const alpha0=I0-A1/2;              // zero-lift angle (rad)
+  const a=alphaDeg*Math.PI/180;
+  const cl=2*Math.PI*(a-alpha0);
+  const cm=-(Math.PI/4)*(A1-A2);     // moment about quarter-chord
+  return {alpha0Deg:alpha0*180/Math.PI, cl, cmQuarter:cm, clSlopePerDeg:2*Math.PI*Math.PI/180};
+}
+
+/* ---- CO₂ dragster race (RK4 integration) ----
+   m·v' = F_thrust(t) − ½ρ·Cd·A·v² − Crr·m·g,  constant thrust F=J/tb during burn.
+   p: massKg, cd, areaM2, impulseNs, burnS, crr, lengthM, rho(=1.225), g(=9.81). */
+function simulateRace(p){
+  const m=p.massKg, cd=p.cd, A=p.areaM2, J=p.impulseNs, tb=p.burnS, crr=p.crr,
+        L=p.lengthM, rho=p.rho!=null?p.rho:1.225, g=p.g!=null?p.g:9.81;
+  const F=t=> t<tb ? J/tb : 0;
+  const acc=(t,v)=>{
+    let a=(F(t) - 0.5*rho*cd*A*v*v - crr*m*g)/m;
+    if(v<=0 && F(t)<=0) a=Math.max(0,a);   // parked once thrust ends
+    return a;
+  };
+  const dt=2e-4, tMax=8;
+  let t=0,x=0,v=0,top=0,peakDrag=0,px=0,pv=0,pt=0;
+  const samples=[{t:0,x:0,v:0}];
+  let finish=null;
+  while(t<tMax){
+    // RK4
+    const a1=acc(t,v);
+    const a2=acc(t+dt/2, v+a1*dt/2);
+    const a3=acc(t+dt/2, v+a2*dt/2);
+    const a4=acc(t+dt, v+a3*dt);
+    const vN=v+(a1+2*a2+2*a3+a4)/6*dt;
+    const xN=x+(v+vN)/2*dt;
+    pt=t;px=x;pv=v;
+    t+=dt;x=xN;v=vN;
+    top=Math.max(top,v);
+    peakDrag=Math.max(peakDrag, 0.5*rho*cd*A*v*v);
+    if(samples.length<600 && x>=samples[samples.length-1].x + L/500) samples.push({t,x,v});
+    if(x>=L){ const f=(L-px)/(x-px); finish={t:pt+f*dt, v:pv+f*(v-pv)}; break; }
+    if(v<=1e-6 && t>tb) break;
+  }
+  samples.push({t,x:Math.min(x,L),v});
+  return {
+    finishTime: finish?finish.t:null,
+    exitSpeed: finish?finish.v:v,
+    topSpeed: top,
+    avgSpeed: finish?L/finish.t:null,
+    peakDrag,
+    samples, reached:!!finish
+  };
+}
+
+/* expose for tests + browser */
+if(typeof module!=='undefined')module.exports={parseNACA,nacaThickness,nacaCamber,nacaDyDx,nacaProfile,thinAirfoil,simulateRace};
+
+/* ============================ UI (browser only) ============================ */
+if(typeof document!=='undefined'){
+const $=s=>document.getElementById(s);
+const dpr=()=>Math.min(2,window.devicePixelRatio||1);
+function fitCanvas(cv){const r=cv.getBoundingClientRect();cv.width=r.width*dpr();cv.height=r.height*dpr();const c=cv.getContext('2d');c.setTransform(dpr(),0,0,dpr(),0,0);return c;}
+
+/* ---- tabs ---- */
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  const p=b.dataset.pane;
+  $('pane-airfoil').classList.toggle('on',p==='airfoil');
+  $('pane-race').classList.toggle('on',p==='race');
+  $('side-airfoil').style.display=p==='airfoil'?'':'none';
+  $('side-race').style.display=p==='race'?'':'none';
+  p==='airfoil'?drawAirfoil():drawRace();
+}));
+
+/* ---- airfoil ---- */
+const DESCS={'0012':'Symmetric — no camber, no lift at 0°. The neutral baseline; good for struts and rudders.',
+  '2412':'Mild camber (2%) — the classic general-purpose section. Balanced lift and low drag.',
+  '4412':'High camber (4%) — more lift at low speed, more drag. Good for a downforce wing.',
+  '6409':'Very cambered, thin — high-lift low-Reynolds section, the kind used on small model wings.'};
+function drawAirfoil(){
+  const code=$('afCode').value, alpha=+$('afa').value, chord=+$('afc').value;
+  const prof=nacaProfile(code,140,1);
+  const ta=thinAirfoil(code,alpha);
+  if(!prof||!ta){$('afNote').textContent='Enter a valid 4-digit NACA code (e.g. 2412).';return;}
+  const cv=$('afCanvas'),c=fitCanvas(cv),W=cv.getBoundingClientRect().width,H=cv.getBoundingClientRect().height;
+  c.clearRect(0,0,W,H);
+  // fit airfoil (rotated by −alpha to show angle of attack vs oncoming flow →)
+  const pad=70, aw=W-pad*2;
+  const rad=-alpha*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad);
+  const tx=p=>{const x=(p.x-0.5), y=p.y; return {X:pad+aw*(0.5+(x*cs-y*sn)), Y:H/2-aw*(x*sn+y*cs)};};
+  // flow arrows
+  c.strokeStyle='rgba(109,177,254,.35)';c.lineWidth=1.4;
+  for(let i=0;i<7;i++){const y=H*0.16+i*(H*0.68/6);c.beginPath();c.moveTo(10,y);c.lineTo(pad+aw+40,y);c.stroke();
+    c.beginPath();c.moveTo(pad+aw+40,y);c.lineTo(pad+aw+32,y-4);c.lineTo(pad+aw+32,y+4);c.closePath();c.fillStyle='rgba(109,177,254,.35)';c.fill();}
+  // camber line
+  c.strokeStyle='var(--acc)';c.setLineDash([4,3]);c.strokeStyle='#f0803c';c.lineWidth=1.4;c.beginPath();
+  prof.camber.forEach((p,i)=>{const q=tx(p);i?c.lineTo(q.X,q.Y):c.moveTo(q.X,q.Y);});c.stroke();c.setLineDash([]);
+  // airfoil fill
+  c.beginPath();
+  prof.upper.forEach((p,i)=>{const q=tx(p);i?c.lineTo(q.X,q.Y):c.moveTo(q.X,q.Y);});
+  for(let i=prof.lower.length-1;i>=0;i--){const q=tx(prof.lower[i]);c.lineTo(q.X,q.Y);}
+  c.closePath();c.fillStyle='rgba(62,207,142,.14)';c.fill();c.strokeStyle='#3ecf8e';c.lineWidth=2;c.stroke();
+  // Cl vs α inset
+  drawClCurve(c,code,alpha,W-190,18,170,90);
+  // results
+  const rho=1.225,v=15,S=(chord/1000)*(chord/1000)*3; // wing area ~ chord × (3·chord) span guess
+  const down=0.5*rho*v*v*ta.cl*S;
+  $('afCl').textContent=ta.cl.toFixed(3);
+  $('afCl').className='v '+(ta.cl>0?'good':'');
+  $('afA0').textContent=ta.alpha0Deg.toFixed(2)+'°';
+  $('afCm').textContent=ta.cmQuarter.toFixed(3);
+  $('afLD').textContent=(down>=0?down:down).toFixed(2)+' N';
+  $('afLD').className='v '+(down>0?'good':'warn');
+  const stall = alpha>12||alpha<-6;
+  $('afStall').textContent = stall?'past ~12°':'valid';
+  $('afStall').className='v '+(stall?'warn':'');
+  $('afNote').innerHTML=`Cl = 2π(α − α₀). Slope ${ta.clSlopePerDeg.toFixed(3)}/deg. `+
+    `Downforce assumes a ${(chord).toFixed(0)}×${(chord*3).toFixed(0)} mm wing at 15 m/s (real Cl drops ~10-15% and stalls past ~12° — thin theory is inviscid).`;
+  $('afDesc').textContent=DESCS[code]||'';
+  document.querySelectorAll('#afPresets button').forEach(b=>b.classList.toggle('on',b.dataset.naca===code));
+}
+function drawClCurve(c,code,alpha,x0,y0,w,h){
+  c.save();c.strokeStyle='rgba(255,255,255,.14)';c.strokeRect(x0,y0,w,h);
+  c.fillStyle='rgba(0,0,0,.25)';c.fillRect(x0,y0,w,h);
+  const aMin=-8,aMax=16,clMax=2.2;
+  const px=a=>x0+w*(a-aMin)/(aMax-aMin), py=cl=>y0+h*(1-(cl+clMax*0.3)/(clMax*1.3));
+  c.strokeStyle='#6db1ff';c.lineWidth=1.6;c.beginPath();
+  for(let a=aMin;a<=aMax;a+=0.5){const ta=thinAirfoil(code,a);const X=px(a),Y=py(ta.cl);a===aMin?c.moveTo(X,Y):c.lineTo(X,Y);}
+  c.stroke();
+  const t=thinAirfoil(code,alpha);c.fillStyle='#f0803c';c.beginPath();c.arc(px(alpha),py(t.cl),3.5,0,7);c.fill();
+  c.fillStyle='#9aa6b5';c.font='9px sans-serif';c.fillText('Cl vs α',x0+6,y0+12);
+  c.restore();
+}
+['afCode','afa','afc'].forEach(id=>$(id).addEventListener('input',()=>{
+  $('afaV').textContent=(+$('afa').value).toFixed(1)+'°';
+  $('afcV').textContent=(+$('afc').value).toFixed(0)+' mm';
+  drawAirfoil();
+}));
+document.querySelectorAll('#afPresets button').forEach(b=>b.addEventListener('click',()=>{$('afCode').value=b.dataset.naca;drawAirfoil();}));
+
+/* ---- race ---- */
+function readRace(){
+  return {massKg:(+$('rm').value)/1000, cd:+$('rcd').value, areaM2:(+$('ra').value)*1e-4,
+    impulseNs:+$('rj').value, burnS:+$('rtb').value, crr:+$('rrr').value, lengthM:+$('rL').value};
+}
+function drawRace(){
+  const p=readRace(), r=simulateRace(p);
+  const cv=$('rcCanvas'),c=fitCanvas(cv),W=cv.getBoundingClientRect().width,H=cv.getBoundingClientRect().height;
+  c.clearRect(0,0,W,H);
+  const pad={l:52,r:52,t:24,b:34}, pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+  const tMax=Math.max(0.5,r.samples[r.samples.length-1].t), vMax=Math.max(5,r.topSpeed*1.1), xMax=p.lengthM;
+  const PX=t=>pad.l+pw*t/tMax, PVy=v=>pad.t+ph*(1-v/vMax), PXy=x=>pad.t+ph*(1-x/xMax);
+  // grid
+  c.strokeStyle='rgba(255,255,255,.06)';c.lineWidth=1;
+  for(let i=0;i<=5;i++){const y=pad.t+ph*i/5;c.beginPath();c.moveTo(pad.l,y);c.lineTo(W-pad.r,y);c.stroke();}
+  // axes labels
+  c.fillStyle='#9aa6b5';c.font='10px sans-serif';
+  c.fillText('time →',W/2-16,H-8);
+  c.save();c.translate(14,H/2+18);c.rotate(-Math.PI/2);c.fillStyle='#6db1ff';c.fillText('speed (m/s)',0,0);c.restore();
+  c.save();c.translate(W-12,H/2+14);c.rotate(-Math.PI/2);c.fillStyle='#3ecf8e';c.fillText('distance (m)',0,0);c.restore();
+  // burn shading
+  c.fillStyle='rgba(240,128,60,.10)';c.fillRect(pad.l,pad.t,pw*Math.min(p.burnS,tMax)/tMax,ph);
+  c.fillStyle='rgba(240,128,60,.6)';c.font='9px sans-serif';c.fillText('CO₂ burn',pad.l+4,pad.t+11);
+  // distance curve (green)
+  c.strokeStyle='#3ecf8e';c.lineWidth=2;c.beginPath();
+  r.samples.forEach((s,i)=>{const X=PX(s.t),Y=PXy(s.x);i?c.lineTo(X,Y):c.moveTo(X,Y);});c.stroke();
+  // speed curve (blue)
+  c.strokeStyle='#6db1ff';c.lineWidth=2.4;c.beginPath();
+  r.samples.forEach((s,i)=>{const X=PX(s.t),Y=PVy(s.v);i?c.lineTo(X,Y):c.moveTo(X,Y);});c.stroke();
+  // finish marker
+  if(r.reached){const X=PX(r.finishTime);c.strokeStyle='rgba(255,255,255,.5)';c.setLineDash([4,3]);c.beginPath();c.moveTo(X,pad.t);c.lineTo(X,H-pad.b);c.stroke();c.setLineDash([]);
+    c.fillStyle='#fff';c.font='10px sans-serif';c.fillText('🏁 '+r.finishTime.toFixed(3)+'s',X-18,pad.t-8);}
+  // KPIs
+  $('rcTime').textContent = r.reached? r.finishTime.toFixed(3)+' s':'—';
+  $('rcTime').className='v '+(r.reached?'good':'warn');
+  $('rcTop').textContent = (r.topSpeed).toFixed(1)+' m/s';
+  $('rcExit').textContent = (r.exitSpeed).toFixed(1)+' m/s';
+  $('rcAvg').textContent = r.avgSpeed? r.avgSpeed.toFixed(1)+' m/s':'—';
+  $('rcDrag').textContent = r.peakDrag.toFixed(2)+' N';
+  $('rcNote').innerHTML=`Peak speed ${(r.topSpeed*3.6).toFixed(0)} km/h. `+
+    `Drag rises with v² — past the burn it's all that slows you. `+
+    `Try: −10 g mass, or C<sub>d</sub> −0.1, and watch the run time drop.`;
+}
+['rm','rcd','ra','rj','rtb','rrr','rL'].forEach(id=>$(id).addEventListener('input',()=>{
+  $('rmV').textContent=(+$('rm').value).toFixed(0)+' g';
+  $('rcdV').textContent=(+$('rcd').value).toFixed(2);
+  $('raV').textContent=(+$('ra').value).toFixed(1)+' cm²';
+  $('rjV').textContent=(+$('rj').value).toFixed(2)+' N·s';
+  $('rtbV').textContent=(+$('rtb').value).toFixed(2)+' s';
+  $('rrrV').textContent=(+$('rrr').value).toFixed(3);
+  $('rLV').textContent=(+$('rL').value).toFixed(1)+' m';
+  drawRace();
+}));
+window.addEventListener('resize',()=>{document.querySelector('.tab.on').dataset.pane==='airfoil'?drawAirfoil():drawRace();});
+requestAnimationFrame(()=>{drawAirfoil();});
+}
+</script>
+</body>
+</html>

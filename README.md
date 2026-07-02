@@ -7,6 +7,7 @@ A suite of self-contained, offline-first CAD tools for makers. **No build step, 
 | [`laser-studio.html`](laser-studio.html) | Pro 2D vector CAD for laser cutting — layers as laser ops (cut/engrave/score), cut-time estimate, SVG / LightBurn `.lbrn` / G-code export, **✨ AI design copilot** |
 | [`cad-studio.html`](cad-studio.html) | Parametric 3D CAD with a feature timeline — 10 solid kinds, booleans, patterns, mirror, per-axis scale, solid 3D text, mass properties, STL/OBJ export, **✨ AI modeling copilot** |
 | [`cad-brep-opencascade.html`](cad-brep-opencascade.html) | Real B-Rep CAD (OpenCascade via Replicad, self-hosted WASM) — true fillets/chamfers, STEP export |
+| [`aero-lab.html`](aero-lab.html) | **F1-in-Schools sim** — NACA-4 airfoil + thin-airfoil (Glauert) lift/moment analysis, and a CO₂ dragster race simulator (RK4: thrust vs. aero drag vs. rolling resistance → run time) |
 | [`laser-studio-kids.html`](laser-studio-kids.html) | "Zappy" — the laser studio for young kids |
 | [`blocks-3d-kids.html`](blocks-3d-kids.html) | "BlockBuddy" — Tinkercad-style 3D for young kids |
 | [`open-cad-launcher.html`](open-cad-launcher.html) | Launcher linking hosted open-source CAD + the local tools |
